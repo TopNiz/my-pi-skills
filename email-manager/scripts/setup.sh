@@ -56,7 +56,7 @@ USE_SSL=${USE_SSL:-yes}
 
 echo ""
 read -p "Invoice storage directory [~/Nextcloud/.../400-Comptabilite/Invoices]: " INVOICE_DIR
-INVOICE_DIR=${INVOICE_DIR:-"/Users/nizarayed/Nextcloud/600-Upgrade-code.org/005-Entreprise/400-Comptabilite/Invoices"}
+INVOICE_DIR=${INVOICE_DIR:-~/Nextcloud/Invoices}
 
 # 5. Update config file using Python for JSON safety
 python3 -c "

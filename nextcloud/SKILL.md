@@ -427,7 +427,7 @@ Do not enable/disable encryption, decrypt all files, or alter LDAP mappings with
 
 ### Ollama Cloud Models availability
 
-See [references/ollama-cloud-models.md](references/ollama-cloud-models.md) for an up-to-date listing of free vs. paid cloud models on the Ollama server at `82.64.122.51:11434`, used by the `integration_openai` app on codimeo.com.
+See [references/ollama-cloud-models.md](references/ollama-cloud-models.md) for an up-to-date listing of free vs. paid cloud models on the Ollama server, used by the `integration_openai` app.
 
 ## Response style when using this skill
 

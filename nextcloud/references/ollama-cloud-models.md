@@ -1,6 +1,6 @@
 # Ollama Cloud Models — Availability Report
 
-Server: `http://82.64.122.51:11434/v1`
+Server: `http://localhost:11434/v1`
 Tested: 2026-05-18
 
 ## ✅ Free models (34)
@@ -66,7 +66,7 @@ Tested: 2026-05-18
 
 The `integration_openai` app (v4.4.0) is configured to use this Ollama endpoint:
 
-- URL: `http://82.64.122.51:11434/v1`
+- URL: `http://localhost:11434/v1`
 - Service name: `Ollama`
 - Default completion model: `glm-5.1:cloud` **(PAID — needs to be changed)**
 - Default image model: `flux.2-klein-9b`

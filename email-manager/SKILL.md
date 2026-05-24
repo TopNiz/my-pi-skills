@@ -17,7 +17,7 @@ A complete email management workflow for pi. Fetches emails via IMAP, uses pi's 
 Run the setup script:
 
 ```bash
-cd /Users/nizarayed/.agents/skills/email-manager
+cd ~/.agents/skills/email-manager
 chmod +x scripts/setup.sh
 ./scripts/setup.sh
 ```
@@ -69,7 +69,7 @@ Edit `references/CATEGORIES.md` to add/remove categories that match your workflo
 Run the fetch script to get recent unseen emails as structured JSON:
 
 ```bash
-cd /Users/nizarayed/.agents/skills/email-manager
+cd ~/.agents/skills/email-manager
 python3 scripts/fetch_emails.py scripts/config.json
 ```
 
@@ -197,7 +197,7 @@ Ask after presenting: "Shall I archive processed items, or prepare any replies?"
 ### Step 1 — Find invoices in fetched emails
 
 ```bash
-cd /Users/nizarayed/.agents/skills/email-manager
+cd ~/.agents/skills/email-manager
 python3 scripts/fetch_emails.py scripts/config.json > /tmp/emails.json
 python3 scripts/extract_invoices.py /tmp/emails.json scripts/config.json
 ```
@@ -268,10 +268,10 @@ The `config.json` file has a `routing` section that defines where emails should 
 ```json
 "routing": {
   "rules": [
-    {"sender": "identification@nespresso.com", "folder": "Gestion Interne/Finance-Compta"},
-    {"sender": "*@scaleway.com", "folder": "Gestion Interne/IT/008-Scaleway"},
-    {"sender": "no-reply@eticket.fnac.com", "folder": "Gestion Interne/Finance-Compta"},
-    {"sender": "support@scaleway.net", "filter": "subject:facture", "folder": "Gestion Interne/Finance-Compta"}
+    {"sender": "invoices@provider.com", "folder": "Finance/Invoices"},
+    {"sender": "*@cloud-host.com", "folder": "IT/Cloud"},
+    {"sender": "no-reply@tickets.vendor.com", "folder": "Finance/Invoices"},
+    {"sender": "support@cloud-host.net", "filter": "subject:invoice", "folder": "Finance/Invoices"}
   ]
 }
 ```
@@ -296,7 +296,7 @@ The user can teach the skill their preferred categories. When the user says some
 1. Save the example to a learning file:
 
 ```bash
-cat >> /Users/nizarayed/.agents/skills/email-manager/references/user_preferences.json << 'EOF'
+cat >> ~/.agents/skills/email-manager/references/user_preferences.json << 'EOF'
 {
   "learned_rules": [
     {
@@ -358,7 +358,7 @@ Choose one based on user's instructions:
 Use the `find_unsub.py` script:
 
 ```bash
-python3 /Users/nizarayed/.agents/skills/email-manager/tmp/find_unsub.py sender@example.com
+python3 ~/.agents/skills/email-manager/tmp/find_unsub.py sender@example.com
 ```
 
 The script reads one email, extracts the `List-Unsubscribe` header, and prints URLs.
@@ -398,7 +398,7 @@ COPY requires individual or batched operations. Use chunks of 50:
 for i in range(0, len(uids), 50):
     chunk = uids[i:i+50]
     uid_str = ','.join(u.decode() for u in chunk)
-    mail.uid('COPY', uid_str, '"Gestion Interne/Target/Folder"')
+    mail.uid('COPY', uid_str, '"Target/Folder"')
     mail.uid('STORE', uid_str, '+FLAGS', r'(\Deleted)')
 mail.expunge()
 ```
@@ -431,17 +431,17 @@ print(f'Reste INBOX: {remaining}')
 ### Creating IMAP folders
 
 ```python
-mail.create('"Gestion Interne/IT/XXX-Name"')
+mail.create('"Folder/Subfolder"')
 # ALWAYS quote the full folder path with double quotes inside single quotes
 ```
 
 ### Folder naming convention
 
 ```
-Gestion Interne/IT/001-OVH
-Gestion Interne/IT/008-Scaleway
-Gestion Interne/IT/010-SAP
-Gestion Interne/IT/011-GitHub
+IT/OVH
+IT/Cloud
+IT/SAP
+IT/GitHub
 ```
 
 ---
@@ -453,14 +453,14 @@ Update `scripts/config.json` whenever the user says "keep" or "don't delete":
 ```json
 "protected_senders": {
   "list": [
-    "noreply@medium.com",
-    "no-reply@eticket.fnac.com",
-    "identification@nespresso.com"
+    "noreply@newsletter.com",
+    "no-reply@tickets.vendor.com",
+    "invoices@provider.com"
   ]
 }
 ```
 
-Also add routing rules for predictable senders (Qonto → Finance-Compta, Scaleway → IT, etc.) in the `routing.rules` section.
+Also add routing rules for predictable senders (e.g., invoices → Finance, cloud provider → IT) in the `routing.rules` section.
 
 ---
 
