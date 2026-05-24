@@ -1,6 +1,6 @@
 # Ollama Cloud Models — Availability Report
 
-Server: `http://localhost:11434/v1`
+Server: set via `OLLAMA_SERVER_URL` in `~/.pi/agent/.env` (default: `http://localhost:11434/v1`)
 Tested: 2026-05-18
 
 ## ✅ Free models (34)

@@ -427,7 +427,7 @@ Do not enable/disable encryption, decrypt all files, or alter LDAP mappings with
 
 ### Ollama Cloud Models availability
 
-See [references/ollama-cloud-models.md](references/ollama-cloud-models.md) for an up-to-date listing of free vs. paid cloud models on the Ollama server, used by the `integration_openai` app.
+See [references/ollama-cloud-models.md](references/ollama-cloud-models.md) for an up-to-date listing of free vs. paid cloud models. Set `OLLAMA_SERVER_URL` in `~/.pi/agent/.env` to point to your Ollama server (used by the `integration_openai` app).
 
 ## Response style when using this skill
 
