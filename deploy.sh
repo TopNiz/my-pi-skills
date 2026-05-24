@@ -1,47 +1,48 @@
 #!/usr/bin/env bash
-# Deploy skills to a remote host via rsync
+# Push skills to GitHub, then pull on remote hosts.
 #
 # Usage:
-#   ./deploy.sh <ssh-host>         # Deploy skills to remote host
-#   ./deploy.sh codimeo.com        # Example
-#   ./deploy.sh pc-vm-fedora-1.local
+#   ./deploy.sh                              # Push local changes to GitHub
+#   ./deploy.sh codimeo.com                  # Push + pull on remote
+#   ./deploy.sh pc-vm-fedora-1.local         # Push + pull on remote
+#   ./deploy.sh codimeo.com pc-vm-fedora-1.local  # Push + pull on multiple remotes
 #
-# Requires:
-#   - SSH access configured in ~/.ssh/config
-#   - ~/.pi/agent/.env on the remote (copy manually or use scp)
+# .env files are NOT pushed or deployed — each machine manages its own secrets.
+# After first clone on a remote:
+#   cp ~/.agents/skills/ai-usage/.env.example ~/.pi/agent/.env
+#   # Then edit ~/.pi/agent/.env with your keys
 set -euo pipefail
 
-HOST="$1"
 SKILLS_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SKILLS_DIR"
 
-if [ -z "$HOST" ]; then
-  echo "Usage: $0 <ssh-host>"
-  echo "Deploys skills to <ssh-host>:~/.agents/skills/"
-  exit 1
+# Check for uncommitted changes
+if ! git diff --quiet --cached || ! git diff --quiet; then
+  echo "📝 Committing local changes..."
+  git add -A
+  git commit -m "Update skills — $(date '+%Y-%m-%d %H:%M')"
 fi
 
-echo "📦 Deploying skills to $HOST..."
+echo "⬆️  Pushing to GitHub..."
+git push
 
-# Rsync skills (exclude sensitive/config files)
-rsync -avz --delete \
-  -e "ssh -o RemoteCommand=none -o RequestTTY=no" \
-  --exclude='.git/' \
-  --exclude='.env' \
-  --exclude='config.json' \
-  --exclude='__pycache__/' \
-  --exclude='.playwright-cli/' \
-  --exclude='*.pyc' \
-  --exclude='.DS_Store' \
-  "$SKILLS_DIR/" \
-  "$HOST:~/.agents/skills/"
-
-# Also deploy the .env file if it exists locally
-ENV_SRC="$HOME/.pi/agent/.env"
-ENV_DST="$HOST:~/.pi/agent/.env"
-if [ -f "$ENV_SRC" ]; then
-  echo "🔑 Deploying ~/.pi/agent/.env..."
-  scp -o RemoteCommand=none -o RequestTTY=no "$ENV_SRC" "$ENV_DST"
-  ssh -o RemoteCommand=none -o RequestTTY=no "$HOST" "chmod 600 ~/.pi/agent/.env"
+# If no remotes specified, we're done
+if [ $# -eq 0 ]; then
+  echo "✅ Pushed to GitHub. No remotes to update."
+  exit 0
 fi
 
-echo "✅ Done! Skills deployed to $HOST"
+# Pull on each remote host
+for HOST in "$@"; do
+  echo ""
+  echo "🌐 Pulling on $HOST..."
+  ssh -o RemoteCommand=none -o RequestTTY=no "$HOST" \
+    "cd ~/.agents/skills && git pull"
+  echo "✅ $HOST updated"
+done
+
+echo ""
+echo "🎉 All done!"
+echo ""
+echo "📌 Remember: each machine needs its own ~/.pi/agent/.env with secrets."
+echo "   Copy template: cp ~/.agents/skills/ai-usage/.env.example ~/.pi/agent/.env"
