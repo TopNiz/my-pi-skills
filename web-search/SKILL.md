@@ -6,194 +6,183 @@ allowed-tools: Bash(playwright-cli:*) Bash(npx:*)
 
 # Web Search with Playwright
 
-## Core Workflow Pattern (always follow this)
+## Golden Rules
 
-The key rule: **always inspect the page before acting**. Do not assume selectors like `e1` exist — they are snapshot-specific references that may not match the actual page.
-
-### Step-by-step workflow
-
-```bash
-# 1. OPEN the browser (headless by default, add --headed if you get stuck)
-playwright-cli open "https://lite.duckduckgo.com/lite/"
-
-# 2. INSPECT — find the actual input field names/selectors on the page
-playwright-cli --raw eval "() => [...document.querySelectorAll('input, textarea, select')].map(el => ({tag: el.tagName, id: el.id, name: el.name, type: el.type, placeholder: el.placeholder, className: el.className}))"
-# └─ This tells you the real field names (e.g. name="q") instead of guessing "e1"
-
-# 3. FILL in the search using the CORRECT selector (from step 2)
-playwright-cli fill 'input[name="q"]' "your search query here"
-
-# 4. SUBMIT
-playwright-cli click 'input[type="submit"]'
-
-# 5. WAIT for results to load
-sleep 2
-
-# 6. CHECK results — extract structured data
-playwright-cli --raw eval "() => [...document.querySelectorAll('a')].filter(a => a.href?.startsWith('http') && !a.href.includes('duckduckgo.com')).slice(0,10).map(a => ({text: a.textContent?.trim(), href: a.href}))"
-
-# 7. If you need to VISIT a result page, use goto
-playwright-cli goto "https://example.com/page-to-read"
-playwright-cli --raw eval "() => document.body.innerText.slice(0, 5000)"
-
-# 8. When ALL searches are done, CLOSE the browser
-playwright-cli close
-```
-
-### Using `--headed` when results don't make sense
-
-If results are empty, selectors don't match, or the page looks different than expected:
-
-```bash
-# Open the browser VISUALLY so you (and the user) can see what's happening
-playwright-cli open "https://lite.duckduckgo.com/lite/" --headed
-```
-
-The user will see the browser window and can help interpret what's wrong (e.g. "the search field has a different name", "there's a captcha", etc.).
-
-### Multiple searches in one session
-
-Keep the browser open and chain commands instead of opening/closing for each query:
-
-```bash
-playwright-cli open "https://lite.duckduckgo.com/lite/"
-
-# First search
-playwright-cli fill 'input[name="q"]' "first query"
-playwright-cli click 'input[type="submit"]'
-sleep 2
-# ... extract results ...
-
-# Second search (same page, new query)
-playwright-cli fill 'input[name="q"]' "second query"
-playwright-cli click 'input[type="submit"]'
-sleep 2
-# ... extract results ...
-
-# Close only when done
-playwright-cli close
-```
-
-### Anti-patterns to avoid
-
-| ❌ Don't | ✅ Do |
-|----------|------|
-| `playwright-cli fill e1 "query"` without checking | First inspect the page with `--raw eval` to find the real field name |
-| Opening and closing browser for every single search | Keep browser open, chain commands |
-| Running a long script without checking intermediate results | Inspect after each step with `--raw eval` or `snapshot` |
-| Assuming selectors work across different search engines | Each engine has different HTML structure — inspect first |
+1. **`--headed` by default.** Always open the browser in headed mode to avoid captchas (DuckDuckGo, Bing, and Google all block headless browsers aggressively).
+2. **One step at a time.** Execute ONE action, inspect the result, then decide what to do next. Never batch multiple steps in a single bash command or playwright eval.
+3. **Check after every step.** After opening a page: verify it loaded. After filling a form: verify the field has the right value. After clicking: verify the page changed. After extracting results: verify they're meaningful.
+4. **If results are unexpected, STOP and investigate.** Don't blindly continue. Check the page content, check for captchas, check if selectors still match.
+5. **If stuck after 2-3 attempts, ask the user.** They can see the headed browser window and help resolve captchas, selectors, or site-specific issues.
+6. **Close the browser when done.** Always run `playwright-cli close` after all searches complete.
 
 ---
 
-## Quick start
+## Step-by-Step Workflow
+
+### Step 1 — Open the browser (headed)
 
 ```bash
-playwright-cli open https://lite.duckduckgo.com/lite/
-playwright-cli --raw eval "() => [...document.querySelectorAll('input')].map(el => el.name)"
-playwright-cli fill 'input[name="q"]' "your search query"
+playwright-cli open "https://lite.duckduckgo.com/lite/" --headed
+```
+
+**Check:** The command outputs `Browser 'default' opened`. If it shows an error, stop and investigate.
+
+### Step 2 — Inspect the page
+
+```bash
+playwright-cli --raw eval "() => document.body.innerText.slice(0, 1000)"
+```
+
+**Check for:**
+- ✅ Normal page content (search field, title, etc.)
+- ❌ Captcha messages ("Unfortunately, bots use DuckDuckGo too", "Please solve this challenge", etc.)
+- ❌ Error pages, blank pages, redirects
+
+**If there's a captcha:** Ask the user — they can see the headed window and solve it manually.
+
+### Step 3 — Find the search field
+
+```bash
+playwright-cli --raw eval "() => [...document.querySelectorAll('input, textarea, select')].map(el => ({tag: el.tagName, id: el.id, name: el.name, type: el.type, placeholder: el.placeholder, className: el.className}))"
+```
+
+**Check:** Verify the search input field is found (e.g. `name="q"`). If no fields found, inspect the page HTML instead.
+
+### Step 4 — Fill the search query
+
+```bash
+playwright-cli fill 'input[name="q"]' "your search query here"
+```
+
+**Check:** No errors means the field was found and filled.
+
+### Step 5 — Submit
+
+```bash
 playwright-cli click 'input[type="submit"]'
-sleep 2
+```
+
+**Check:** The page title should now include your search query. Wait 2-3 seconds for results.
+
+### Step 6 — Wait and check for captcha
+
+```bash
+sleep 3
+playwright-cli --raw eval "() => document.body.innerText.slice(0, 1000)"
+```
+
+**Check:**
+- ✅ Results page with search results
+- ❌ Captcha challenge ("Select all squares containing a duck", etc.)
+
+**If captcha appeared:** Ask the user to solve it visually in the headed window.
+
+### Step 7 — Extract results
+
+```bash
 playwright-cli --raw eval "() => [...document.querySelectorAll('a')].filter(a => a.href?.startsWith('http') && !a.href.includes('duckduckgo.com')).slice(0,10).map(a => ({text: a.textContent?.trim(), href: a.href}))"
+```
+
+**Check:**
+- ✅ 5-10 results with titles and URLs
+- ❌ Empty array `[]` — means selectors don't match or results didn't load
+- ❌ Fewer than 3 results — might be captcha or no results
+
+**If results are empty:** Check the page HTML to find the actual result structure:
+```bash
+playwright-cli --raw eval "() => document.body.innerHTML.slice(0, 3000)"
+```
+
+### Step 8 — Visit a result (optional)
+
+```bash
+playwright-cli goto "https://example.com/result-page"
+sleep 2
+playwright-cli --raw eval "() => document.body.innerText.slice(0, 5000)"
+```
+
+**Check:** The page content loaded correctly.
+
+### Step 9 — Close the browser
+
+```bash
 playwright-cli close
 ```
+
+**Check:** `Browser 'default' closed` is shown.
 
 ---
 
 ## Search Engines & Strategies
 
-### DuckDuckGo Lite (recommended — lightweight, no captcha)
-URL: `https://lite.duckduckgo.com/lite/`
+### DuckDuckGo Lite (recommended first attempt)
+```
+https://lite.duckduckgo.com/lite/
+```
 - Minimal HTML, fast loading
-- No JavaScript rendering needed
+- Prone to captchas in headless mode → always use `--headed`
 - Input field: `input[name="q"]`
+- Results: `a` tags with href starting with `http`
 
-```bash
-playwright-cli open https://lite.duckduckgo.com/lite/
-playwright-cli fill 'input[name="q"]' "your search query"
-playwright-cli click 'input[type="submit"]'
-sleep 2
-playwright-cli --raw eval "() => [...document.querySelectorAll('a')].filter(a => a.href?.startsWith('http') && !a.href.includes('duckduckgo.com')).slice(0,10).map(a => ({text: a.textContent?.trim(), href: a.href}))"
-playwright-cli close
+### DuckDuckGo HTML (alternative if Lite is blocked)
 ```
-
-### DuckDuckGo HTML (alternative)
-URL: `https://html.duckduckgo.com/html/`
-- More structured result layout with CSS classes
-- Input field: `input[name="q"]`
-
-```bash
-playwright-cli open https://html.duckduckgo.com/html/
-playwright-cli fill 'input[name="q"]' "your search query"
-playwright-cli click 'input[type="submit"]'
-sleep 2
-playwright-cli --raw eval "() => [...document.querySelectorAll('.result__title a')].slice(0,10).map(a => ({text: a.textContent?.trim(), href: a.href}))"
-playwright-cli close
+https://html.duckduckgo.com/html/
 ```
+- More structured results with CSS classes
+- Same field: `input[name="q"]`
+- Results: `.result__title a`
 
-### Google (use with caution)
-URL: `https://www.google.com/search?q=requête`
-- May trigger captchas in automated mode
-- Use `--headed` for manual captcha resolution if needed
-
-```bash
-playwright-cli open "https://www.google.com/search?q=your+search+query"
-sleep 2
-playwright-cli --raw eval "() => [...document.querySelectorAll('a')].filter(a => a.href?.startsWith('http') && !a.href.includes('google')).slice(0,10).map(a => ({text: a.textContent?.trim(), href: a.href}))"
-playwright-cli close
+### Google (fallback)
 ```
-
-### Bing (less aggressive bot detection)
-URL: `https://www.bing.com/search?q=requête`
-
-```bash
-playwright-cli open "https://www.bing.com/search?q=your+search+query"
-sleep 2
-playwright-cli --raw eval "() => [...document.querySelectorAll('a')].filter(a => a.href?.startsWith('http') && !a.href.includes('bing')).slice(0,10).map(a => ({text: a.textContent?.trim(), href: a.href}))"
-playwright-cli close
+https://www.google.com/search?q=your+query
 ```
+- Most aggressive with captchas — use `--headed` and expect user help
+- Results: `a[jsname]` or `div.yuRUbf a`
+
+### Bing (fallback if DDG fails)
+```
+https://www.bing.com/search?q=your+query
+```
+- Less aggressive than Google but still blocks headless
+- Results: `li.b_algo h2 a`
+
+**If one engine blocks you:** Try another. If all block, ask the user to solve the captcha in the headed window.
 
 ---
 
-## Extracting page content (after finding a useful result)
+## Captcha Handling
 
-### Get the main text of a page
+If any of these appear in the page content:
 
-```bash
-playwright-cli goto "https://example.com/article"
-sleep 2
-playwright-cli --raw eval "() => document.querySelector('main')?.innerText || document.querySelector('article')?.innerText || document.body.innerText" > article-content.txt
-```
+- "Unfortunately, bots use DuckDuckGo too"
+- "Please complete the following challenge"
+- "Select all squares containing a"
+- "One last step — Please solve the challenge"
+- CAPTCHA / reCAPTCHA
 
-### Get full page content for analysis
-
-```bash
-playwright-cli goto "https://example.com/documentation"
-sleep 2
-playwright-cli --raw eval "() => document.body.innerText.slice(0, 5000)" > page-content.txt
-```
+**Do NOT continue blindly.** Stop and tell the user. They can see the headed browser window and solve it. After they solve it, re-check the page and continue.
 
 ---
 
-## Troubleshooting
+## Anti-patterns
 
-### The page doesn't load correctly
-```bash
-playwright-cli open https://lite.duckduckgo.com/lite/ --headed
-```
+| ❌ Don't | ✅ Do |
+|----------|------|
+| Batch open + fill + submit + extract in one bash command | One action per bash command, inspect between each |
+| Assume selectors like `e1` or `#r1-0` work | Inspect the actual page structure first |
+| Assume no captcha | Check page content after every navigation |
+| Restart browser for every search | Keep browser open, chain searches |
+| Ignore empty results | Stop, inspect the page, find why |
+| Keep trying the same failing approach >3 times | Ask the user for help |
+| Forget to close the browser | Always close with `playwright-cli close` when done |
 
-### Captcha or blocking
-```bash
-# 1. Try DuckDuckGo Lite (no captcha)
-# 2. Use --headed and resolve manually
-playwright-cli open "https://lite.duckduckgo.com/lite/" --headed
-# 3. Add delays between actions
-sleep 3
-```
+---
 
-### CSS selectors don't match
-```bash
-# Snapshot captures the current page structure
-playwright-cli snapshot --filename=page-state.yml
-# Then inspect to find working selectors
-playwright-cli --raw eval "() => document.body.innerHTML.slice(0, 3000)"
-```
+## Debugging checklist when results are empty
+
+1. Check page content: `playwright-cli --raw eval "() => document.body.innerText.slice(0, 1000)"`
+2. Check for captcha or blocking messages
+3. Check the actual HTML: `playwright-cli --raw eval "() => document.body.innerHTML.slice(0, 3000)"`
+4. Check if selectors changed: `playwright-cli --raw eval "() => [...document.querySelectorAll('a, input, button')].map(el => ({tag: el.tagName, id: el.id, class: el.className, text: el.textContent?.trim().slice(0,50)}))"`
+5. Try a different search engine
+6. If still stuck after 2-3 attempts → **ask the user**
