@@ -66,6 +66,40 @@ duplex=F     → duplex not supported
 system_profiler SPPrintersDataType | grep -A 20 "Scanning support: Yes"
 ```
 
+If Bonjour browsing does not show the scanner, derive the printer hostname/URL from CUPS:
+
+```bash
+# List configured printers and their device URIs
+lpstat -t
+
+# Example output:
+# device for Canon_G4010_series: dnssd://Canon%20G4010%20series._ipps._tcp.local./?uuid=...
+
+# Get detailed printer info and PPD path
+lpstat -l -p Canon_G4010_series
+
+# Inspect the PPD for AirPrint URLs/hostnames
+head -60 /private/etc/cups/ppd/Canon_G4010_series.ppd
+```
+
+Look for lines such as:
+
+```text
+*APSupplies: "http://0924B3000000.local./index.html?page=PAGE_INK"
+```
+
+This reveals the printer hostname (`0924B3000000.local.` in this example). Once reachable, use it for read-only eSCL checks:
+
+```bash
+curl -s http://0924B3000000.local./eSCL/ScannerStatus
+curl -s http://0924B3000000.local./eSCL/ScannerCapabilities
+```
+
+Notes:
+- The `dnssd://..._ipps._tcp.local` URI is the Bonjour service name for printing, not necessarily the direct HTTP hostname.
+- The PPD `APSupplies` URL often contains the real device hostname.
+- Do not create a scan job unless explicitly requested; `ScannerStatus` and `ScannerCapabilities` are read-only.
+
 **Linux:**
 ```bash
 # Using avahi (native mDNS)

@@ -48,18 +48,25 @@ ssh github.com                # GitHub        → git operations
 # Run a single command and exit
 ssh <host-alias> "command"
 
+# Agent-friendly / automation-safe form:
+# Use this when the SSH config defines RemoteCommand or requests a TTY/tmux.
+# It disables automatic interactive startup commands and avoids pseudo-TTY allocation.
+ssh -o RemoteCommand=none -o RequestTTY=no <host-alias> "command"
+
 # Examples:
-ssh <remote-server-1> "uptime && free -h"
-ssh <vm-fedora> "systemctl status nginx"
-ssh <ubuntu-server> "df -h /"
-ssh <mac-silicon> "sw_vers"
+ssh -o RemoteCommand=none -o RequestTTY=no <remote-server-1> "uptime && free -h"
+ssh -o RemoteCommand=none -o RequestTTY=no <vm-fedora> "systemctl status nginx"
+ssh -o RemoteCommand=none -o RequestTTY=no <ubuntu-server> "df -h /"
+ssh -o RemoteCommand=none -o RequestTTY=no <mac-silicon> "sw_vers"
 
 # With environment variables
-ssh <host-alias> "ENV=value ./script.sh"
+ssh -o RemoteCommand=none -o RequestTTY=no <host-alias> "ENV=value ./script.sh"
 
 # Pipe local data to remote stdin
-cat local-file.txt | ssh <host-alias> "cat > /tmp/remote-file.txt"
+cat local-file.txt | ssh -o RemoteCommand=none -o RequestTTY=no <host-alias> "cat > /tmp/remote-file.txt"
 ```
+
+> **Agent note**: Many personal SSH configs start tmux/shell setup via `RemoteCommand` and may force a TTY for interactive use. That is convenient for humans but inconvenient for agents and scripts. For non-interactive remote checks, prefer `-o RemoteCommand=none -o RequestTTY=no` so the requested command runs directly and exits cleanly.
 
 ### 3. File Transfer — SCP
 
