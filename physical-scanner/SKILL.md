@@ -1,9 +1,9 @@
 ---
-name: document-scanner
+name: physical-scanner
 description: Scan physical documents to PDF via AirPrint/eSCL network scanners using the direct eSCL HTTP protocol. No proprietary drivers needed. Supports flatbed and ADF (auto document feeder), single and duplex scanning.
 ---
 
-# Document Scanner — eSCL / AirScan
+# Physical Scanner — eSCL / AirScan
 
 Scan documents directly from an AirPrint-compatible network scanner/printer using the **eSCL** (Email-capable Scanning Lite) protocol over HTTP. Works with any modern MFP that supports Apple AirScan / AirPrint scanning (Canon, HP, Brother, Epson, etc.).
 
@@ -193,43 +193,16 @@ curl -s -X DELETE "http://<scanner-ip>:80/eSCL/ScanJobs/{jobId}"
 
 ## Post-Scan: Extract & Describe Scanned Documents
 
-Once you've scanned a document, you can analyze it with pi's vision models to extract text, describe layout, and generate structured markdown descriptions.
-
-### Setup
-
-Requires a vision-capable model configured in pi (e.g., `gpt-4o`, `gpt-4.1`, `gpt-5.x`).
-Run `pi --list-models` and check the `images` column for `yes`.
-
-### Usage
+Once you've scanned a document, analyze it with the **[image-extraction](../image-extraction/SKILL.md)** skill using pi's vision models:
 
 ```bash
-# Single scanned image
+cd ~/.agents/skills/image-extraction
 ./extract-image.sh scan-output.pdf
-```
-
-Creates `scan-output_description.md` next to the file.
-
-```bash
-# Multiple scans at once
 ./extract-image.sh page1.pdf page2.pdf page3.png
-
-# With a specific provider/model
 ./extract-image.sh --provider openai-codex --model gpt-5.4 invoice.pdf
-
-# Custom output directory
-./extract-image.sh --output-dir ./descriptions *.pdf
 ```
 
-### What it produces
-
-Each `<file>_description.md` contains:
-- **Aperçu général** — Overall content summary
-- **Layout** — Composition and structure
-- **Contenu textuel** — All text transcribed verbatim
-- **Éléments visuels** — Icons, illustrations, colors
-- **Objectif** — Purpose and intended message
-
-This is especially useful after scanning invoices, contracts, or handwritten notes — you get both the image and a machine-readable description.
+See [image-extraction](../image-extraction/SKILL.md) for full details.
 
 ---
 
