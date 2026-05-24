@@ -1,0 +1,39 @@
+{
+  "_comment": "Email Manager Configuration",
+  "_instructions": "Copy this file to config.json and fill in your email details. For Gmail, enable IMAP in Settings → See All Settings → Forwarding and POP/IMAP → Enable IMAP. Then create an App Password at https://myaccount.google.com/apppasswords (you need 2FA enabled).",
+
+  "imap": {
+    "server": "imap.gmail.com",
+    "port": 993,
+    "use_ssl": true,
+    "username": "your.email@gmail.com",
+    "password": "your-app-password"
+  },
+
+  "filters": {
+    "max_emails": 50,
+    "fetch_days_back": 7,
+    "include_seen": false,
+    "folders": ["INBOX"]
+  },
+
+  "invoices": {
+    "storage_dir": "/path/to/invoices",
+    "auto_extract": true,
+    "save_attachments": true
+  },
+
+  "categories": {
+    "taxonomy_file": "../references/CATEGORIES.md"
+  },
+
+  "protected_senders": {
+    "description": "Emails from these senders will NEVER be deleted or unsubscribed.",
+    "list": []
+  },
+
+  "routing": {
+    "description": "Add your folder routing rules here. Format: 'sender@domain' or '*@domain' → 'Folder/Path'",
+    "rules": []
+  }
+}

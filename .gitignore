@@ -1,0 +1,9 @@
+# Secrets & credentials
+.env
+**/config.json
+**/user_preferences.json
+**/__pycache__/
+**/.playwright-cli/
+*.pyc
+*.pyo
+.DS_Store
