@@ -1,6 +1,6 @@
 ---
 name: ai-usage
-description: Check usage, costs, and account status across your AI providers — OpenAI (costs + token usage via admin API key), DeepSeek (balance), and Ollama Cloud (model access). API keys read securely from macOS keychain, pi's auth.json, and opencode config.
+description: Check usage, costs, and account status across your AI providers — OpenAI (costs + token usage via admin API key), DeepSeek (balance), Ollama Cloud (model access), and GitHub Copilot (plan + features). API keys read securely from macOS keychain, pi’s auth.json, and opencode config.
 ---
 
 # AI Usage Checker
@@ -12,6 +12,7 @@ Check the status, costs, and usage of all your AI accounts from one place.
 | **🔵 OpenAI** | 30-day cost, token usage (input/output/cached), request count |
 | **🟢 DeepSeek** | Account balance, credited vs topped-up funds |
 | **🟠 Ollama Cloud** | API key validity, available cloud models |
+| **🐙 GitHub Copilot** | Plan type, features enabled, available models count |
 
 ---
 
@@ -24,10 +25,11 @@ ai-usage/
 └── providers/
     ├── openai.py                     # OpenAI costs + usage
     ├── deepseek.py                   # DeepSeek balance
-    └── ollama.py                     # Ollama Cloud model list
+    ├── ollama.py                     # Ollama Cloud model list
+    └── github_copilot.py             # GitHub Copilot plan + features
 ```
 
-Each provider script is **standalone** — you can run them individually:
+Each provider script is **standalone** - you can run them individually:
 
 ```bash
 ./providers/openai.py                 # Pretty output
@@ -55,13 +57,14 @@ The file should contain:
 OPENAI_ADMIN_KEY=sk-admin-your-openai-admin-key-here
 DEEPSEEK_KEY=sk-your-deepseek-api-key-here
 OLLAMA_CLOUD_KEY=your-ollama-cloud-api-key-here
+GITHUB_COPILOT_KEY=ghu_your-github-oauth-token-here
 ```
 
-### OpenAI — Admin API key
+### OpenAI - Admin API key
 
 OpenAI's [Usage API](https://developers.openai.com/cookbook/examples/completions_usage_api) and [Costs API](https://api.openai.com/v1/organization/costs) require an **Admin API key** (a regular project key won't work).
 
-1. Create an admin key at **OpenAI Dashboard → Settings → Organization → Admin Keys**  
+1. Create an admin key at **OpenAI Dashboard → Settings → Organization → Admin Keys**
    https://platform.openai.com/settings/organization/admin-keys
 
 2. Add it to `~/.pi/agent/.env` under `OPENAI_ADMIN_KEY=`
@@ -82,12 +85,14 @@ echo "sk-admin-your-key-here" > ~/.config/openai/admin-key
 chmod 600 ~/.config/openai/admin-key
 ```
 
-### DeepSeek & Ollama Cloud
+### DeepSeek, Ollama Cloud & GitHub Copilot
 
 Fallback locations if `.env` is not set:
 
-- `~/.pi/agent/auth.json` — DeepSeek
+- `~/.pi/agent/auth.json` — DeepSeek (`deepseek.key`)
 - `~/.local/share/opencode/auth.json` — Ollama Cloud
+- `~/.pi/agent/auth.json` — GitHub Copilot (`github-copilot.refresh`) — *auto-populated when pi authenticates with Copilot*
+- `gh auth token` — GitHub Copilot fallback (install `gh` CLI and run `gh auth login`)
 
 ---
 
@@ -114,22 +119,33 @@ Output:
   ✅ Account:        Active
 
 🟠 Ollama Cloud
-  ✅ API key valid — 39 cloud models accessible
+  ✅ API key valid - 39 cloud models accessible
+
+🐙 GitHub Copilot
+  ✅ Plan:     Individual - Yearly
+  ♾️  Quota:    Unlimited (full subscriber)
+  🤖 Models:   38 available
+  💬 Chat:     enabled
+  🕵️  Agent:    enabled
+  🔍 Search:   enabled
+  🔒 Public code suggestions: disabled
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 📊 For detailed billing:
-   OpenAI:    https://platform.openai.com/usage
-   DeepSeek:  https://platform.deepseek.com
-   Ollama:    https://ollama.com/settings/billing
+   OpenAI:           https://platform.openai.com/usage
+   DeepSeek:         https://platform.deepseek.com
+   Ollama:           https://ollama.com/settings/billing
+   GitHub Copilot:   https://github.com/settings/copilot
 ```
 
 ### Single provider
 
 ```bash
-./check-usage.sh openai       # OpenAI only
-./check-usage.sh deepseek     # DeepSeek only
-./check-usage.sh ollama       # Ollama Cloud only
+./check-usage.sh openai           # OpenAI only
+./check-usage.sh deepseek         # DeepSeek only
+./check-usage.sh ollama           # Ollama Cloud only
+./check-usage.sh github-copilot   # GitHub Copilot only
 ```
 
 ### Output modes
@@ -174,6 +190,39 @@ Key: `~/.pi/agent/auth.json` → `deepseek.key`
 
 Key: `~/.local/share/opencode/auth.json` → `ollama-cloud.key`
 
+### GitHub Copilot (`providers/github_copilot.py`)
+
+| Endpoint | Data |
+|---|---|
+| `GET https://api.github.com/copilot_internal/v2/token` | Plan (SKU), features enabled, short-lived access token |
+| `GET https://api.githubcopilot.com/models` | Available model list (count + names) |
+
+**Key details:**
+- Both endpoints require editor-identity headers: `Editor-Version`, `Editor-Plugin-Version`, `User-Agent` - GitHub blocks requests without them
+- The `/copilot_internal/v2/token` endpoint uses `Authorization: token <ghu_...>` (OAuth user token)
+- The `/models` endpoint uses `Authorization: Bearer <access_token>` (the short-lived token returned above)
+- The access token is short-lived (~30 min); `refresh_in: 1500s` in the response tells clients when to refresh
+- There is **no per-user usage/cost API** - Copilot is flat-rate; `limited_user_quotas: null` means unlimited
+- The `/user/copilot` REST endpoint returns 404 for individual users - not a valid route
+- GraphQL `copilotSubscription` field doesn't exist either
+
+**SKU → plan label mapping:**
+| SKU | Label |
+|---|---|
+| `yearly_subscriber_quota` | Individual - Yearly |
+| `monthly_subscriber_quota` | Individual - Monthly |
+| `free_subscriber_quota` | Free Tier |
+| `business` | Copilot Business |
+| `enterprise` | Copilot Enterprise |
+
+**Features reported from the token response:**
+`chat_enabled`, `code_review_enabled`, `agent_mode_auto_approval`, `codesearch`, `xcode`, `mcp` (parsed from raw token string)
+
+**Key lookup order:**
+1. `GITHUB_COPILOT_KEY` env var / `~/.pi/agent/.env`
+2. `~/.pi/agent/auth.json` → `github-copilot.refresh` *(populated automatically by pi when using Copilot)*
+3. `gh` CLI - `gh auth token` *(fallback; the regular `gho_...` token also works for this endpoint)*
+
 ---
 
 ## Extending
@@ -188,4 +237,4 @@ Adding a new provider = adding one Python file:
 
 2. Register it in `check-usage.sh` by adding to the `PROVIDER_SCRIPTS` array.
 
-That's it — the orchestrator handles the rest.
+That's it - the orchestrator handles the rest.

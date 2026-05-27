@@ -22,6 +22,7 @@ PROVIDER_SCRIPTS=(
   "openai:openai.py"
   "deepseek:deepseek.py"
   "ollama:ollama.py"
+  "github-copilot:github_copilot.py"
 )
 
 OUTPUT_MODE="pretty"  # pretty, json, verbose
@@ -30,7 +31,7 @@ FILTER=""             # empty = all providers
 # --- Option parsing ---
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    openai|deepseek|ollama) FILTER="$1"; shift ;;
+    openai|deepseek|ollama|github-copilot) FILTER="$1"; shift ;;
     --json)    OUTPUT_MODE="json"; shift ;;
     --verbose) OUTPUT_MODE="verbose"; shift ;;
     -h|--help)
@@ -39,9 +40,10 @@ while [[ $# -gt 0 ]]; do
       echo "Usage: $0 [provider] [--json|--verbose]"
       echo ""
       echo "Providers (omit to show all):"
-      echo "  openai      OpenAI API (costs, token usage)"
-      echo "  deepseek    DeepSeek API (balance, credits)"
-      echo "  ollama      Ollama Cloud (key validity, model count)"
+      echo "  openai           OpenAI API (costs, token usage)"
+      echo "  deepseek         DeepSeek API (balance, credits)"
+      echo "  ollama           Ollama Cloud (key validity, model count)"
+      echo "  github-copilot   GitHub Copilot (plan, features, models)"
       echo ""
       echo "Options:"
       echo "  --json        Output raw JSON responses"
@@ -84,9 +86,10 @@ if [ "$OUTPUT_MODE" != "json" ]; then
     script="${entry#*:}"
 
     case "$name" in
-      openai)   echo "🔵 OpenAI (API)" ;;
-      deepseek) echo "🟢 DeepSeek" ;;
-      ollama)   echo "🟠 Ollama Cloud" ;;
+      openai)          echo "🔵 OpenAI (API)" ;;
+      deepseek)         echo "🟢 DeepSeek" ;;
+      ollama)           echo "🟠 Ollama Cloud" ;;
+      github-copilot)   echo "🐙 GitHub Copilot" ;;
     esac
 
     if [ -x "$script" ]; then
@@ -108,9 +111,10 @@ if [ "$OUTPUT_MODE" != "json" ]; then
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo ""
   echo "📊 For detailed billing:"
-  echo "   OpenAI:    https://platform.openai.com/usage"
-  echo "   DeepSeek:  https://platform.deepseek.com"
-  echo "   Ollama:    https://ollama.com/settings/billing"
+  echo "   OpenAI:           https://platform.openai.com/usage"
+  echo "   DeepSeek:         https://platform.deepseek.com"
+  echo "   Ollama:           https://ollama.com/settings/billing"
+  echo "   GitHub Copilot:   https://github.com/settings/copilot"
   echo ""
 
 # ============================================================
@@ -133,7 +137,7 @@ import json, os
 
 tmpdir = '$tmpdir'
 result = {}
-providers = ['openai', 'deepseek', 'ollama']
+providers = ['openai', 'deepseek', 'ollama', 'github-copilot']
 
 for p in providers:
     path = os.path.join(tmpdir, f'{p}.json')
