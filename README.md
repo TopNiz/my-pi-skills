@@ -139,6 +139,7 @@ For Gmail, enable IMAP and use an app password rather than your normal account p
 Some skills rely on machine-local tools or configuration:
 
 - `extract-text` uses a local git-ignored `.env` file for the protected Tika service credentials.
+- `google-calendar` uses local git-ignored `credentials.json` and `token.json` OAuth files.
 - `ssh-skills` uses the local SSH config and keys.
 - `preview-manager` requires macOS Preview.app and GUI AppleScript access.
 - `web-browser` and `web-search` use Playwright / `playwright-cli` and may create local browser/session data.
@@ -246,7 +247,7 @@ Before pushing, verify that you are not publishing secrets or private machine de
 ```bash
 git status --short
 git diff --cached
-git ls-files | grep -E '(^|/)(\.env|config\.json|user_preferences\.json)$' || true
+git ls-files | grep -E '(^|/)(\.env|config\.json|credentials\.json|token\.json|user_preferences\.json)$' || true
 ```
 
 If a sensitive file was accidentally tracked, remove it from Git while keeping the local copy:

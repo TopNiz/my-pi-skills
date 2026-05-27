@@ -1,6 +1,8 @@
 # Secrets & credentials
 .env
 **/config.json
+**/credentials.json
+**/token.json
 **/user_preferences.json
 **/__pycache__/
 **/.playwright-cli/
