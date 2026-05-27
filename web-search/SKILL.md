@@ -13,7 +13,7 @@ allowed-tools: Bash(playwright-cli:*) Bash(npx:*)
 3. **Check after every step.** After opening a page: verify it loaded. After filling a form: verify the field has the right value. After clicking: verify the page changed. After extracting results: verify they're meaningful.
 4. **If results are unexpected, STOP and investigate.** Don't blindly continue. Check the page content, check for captchas, check if selectors still match.
 5. **If stuck after 2-3 attempts, ask the user.** They can see the headed browser window and help resolve captchas, selectors, or site-specific issues.
-6. **Close the browser when done.** Always run `playwright-cli close` after all searches complete.
+6. **Close the browser when done.** Always run `playwright-cli close` immediately after the search/browsing task finishes, even if the user did not explicitly ask. Do not leave headed browser windows open.
 
 ---
 
@@ -103,13 +103,15 @@ playwright-cli --raw eval "() => document.body.innerText.slice(0, 5000)"
 
 **Check:** The page content loaded correctly.
 
-### Step 9 — Close the browser
+### Step 9 — Close the browser — mandatory final step
+
+Always close the browser after extracting the final results or finishing the requested browsing task:
 
 ```bash
 playwright-cli close
 ```
 
-**Check:** `Browser 'default' closed` is shown.
+**Check:** `Browser 'default' closed` is shown. If it errors because no browser is open, that's fine — the goal is to ensure no headed browser window is left open.
 
 ---
 
@@ -174,7 +176,7 @@ If any of these appear in the page content:
 | Restart browser for every search | Keep browser open, chain searches |
 | Ignore empty results | Stop, inspect the page, find why |
 | Keep trying the same failing approach >3 times | Ask the user for help |
-| Forget to close the browser | Always close with `playwright-cli close` when done |
+| Forget to close the browser | Always close with `playwright-cli close` as the mandatory final step of every search/browsing task |
 
 ---
 
