@@ -14,7 +14,8 @@ This repository is intended to be cloned to:
 |---|---|---|
 | `ai-usage` | Check account usage, costs, balances, and access across OpenAI, DeepSeek, and Ollama Cloud. | [`ai-usage/SKILL.md`](ai-usage/SKILL.md) |
 | `email-manager` | Fetch IMAP email, categorize messages, detect urgency, prepare reviews, and extract invoices. | [`email-manager/SKILL.md`](email-manager/SKILL.md) |
-| `image-extraction` | Extract detailed Markdown descriptions from images using pi with a vision-capable model. | [`image-extraction/SKILL.md`](image-extraction/SKILL.md) |
+| `describe-image` | Describe images in detail using pi with a vision-capable model. | [`describe-image/SKILL.md`](describe-image/SKILL.md) |
+| `extract-text` | Extract text and OCR images/PDFs using the protected Apache Tika service. | [`extract-text/SKILL.md`](extract-text/SKILL.md) |
 | `nextcloud` | Administer and troubleshoot Nextcloud with the `occ` command. | [`nextcloud/SKILL.md`](nextcloud/SKILL.md) |
 | `openai-image` | Generate and edit images with OpenAI `gpt-image-*` models. | [`openai-image/SKILL.md`](openai-image/SKILL.md) |
 | `physical-scanner` | Scan paper documents to PDF via AirPrint/eSCL network scanners. | [`physical-scanner/SKILL.md`](physical-scanner/SKILL.md) |
@@ -32,7 +33,8 @@ This repository is intended to be cloned to:
 ├── .gitignore
 ├── ai-usage/
 ├── email-manager/
-├── image-extraction/
+├── describe-image/
+├── extract-text/
 ├── nextcloud/
 ├── openai-image/
 ├── physical-scanner/
@@ -136,6 +138,7 @@ For Gmail, enable IMAP and use an app password rather than your normal account p
 
 Some skills rely on machine-local tools or configuration:
 
+- `extract-text` uses a local git-ignored `.env` file for the protected Tika service credentials.
 - `ssh-skills` uses the local SSH config and keys.
 - `preview-manager` requires macOS Preview.app and GUI AppleScript access.
 - `web-browser` and `web-search` use Playwright / `playwright-cli` and may create local browser/session data.

@@ -227,16 +227,16 @@ curl -s -X DELETE "http://<scanner-ip>:80/eSCL/ScanJobs/{jobId}"
 
 ## Post-Scan: Extract & Describe Scanned Documents
 
-Once you've scanned a document, analyze it with the **[image-extraction](../image-extraction/SKILL.md)** skill using pi's vision models:
+Once you've scanned a document, analyze it with the **[describe-image](../describe-image/SKILL.md)** skill using pi's vision models:
 
 ```bash
-cd ~/.agents/skills/image-extraction
-./extract-image.sh scan-output.pdf
-./extract-image.sh page1.pdf page2.pdf page3.png
-./extract-image.sh --provider openai-codex --model gpt-5.4 invoice.pdf
+cd ~/.agents/skills/describe-image
+./describe-image.sh scan-output.pdf
+./describe-image.sh page1.pdf page2.pdf page3.png
+./describe-image.sh --provider openai-codex --model gpt-5.4 invoice.pdf
 ```
 
-See [image-extraction](../image-extraction/SKILL.md) for full details.
+See [describe-image](../describe-image/SKILL.md) for full details.
 
 ---
 

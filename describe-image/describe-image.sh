@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Extract detailed description from one or more images using pi + a vision model.
+# Describe one or more images using pi + a vision model.
 # Usage:
-#   ./extract-image.sh image.png [image2.png ...]
-#   ./extract-image.sh --provider openai-codex --model gpt-5.4 image.png
-#   ./extract-image.sh --output-dir ./descriptions image.png
+#   ./describe-image.sh image.png [image2.png ...]
+#   ./describe-image.sh --provider openai-codex --model gpt-5.4 image.png
+#   ./describe-image.sh --output-dir ./descriptions image.png
 #
 # Each image produces a <name>_description.md file next to it (or in --output-dir).
 
@@ -62,7 +62,7 @@ fi
 # Resolve pi path
 PI_CMD=$(which pi 2>/dev/null || echo "$HOME/.nvm/versions/node/v24.11.0/bin/pi")
 
-echo "🔍 Image Extractor — Using $PROVIDER/$MODEL"
+echo "🔍 Image Describer — Using $PROVIDER/$MODEL"
 echo ""
 
 DESCRIBE_PROMPT="Describe this image in great detail. Cover:
