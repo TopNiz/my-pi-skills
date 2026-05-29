@@ -12,49 +12,90 @@ A complete email management workflow for pi. Fetches emails via IMAP, uses pi's 
 
 ## 🚀 Quick Start (One-Time Setup)
 
-### 1. Configure your email account
+### 1. Store passwords in macOS Keychain
 
-Run the setup script:
+All passwords are stored in **macOS Keychain** (never in config files). Add each account:
 
 ```bash
-cd ~/.agents/skills/email-manager
-chmod +x scripts/setup.sh
-./scripts/setup.sh
+# Store your primary email
+security add-generic-password -a "your.email@example.com" -s "email-manager" -w "YOUR_PASSWORD" -U
+
+# Store additional accounts
+security add-generic-password -a "other@domain.com" -s "email-manager" -w "YOUR_PASSWORD" -U
 ```
 
-This prompts for:
-- **IMAP server** (default: `imap.gmail.com` — works for Gmail, Google Workspace)
-- **Port** (default: `993`)
-- **Email address**
-- **Password / App Password** (for Gmail with 2FA, create an App Password at https://myaccount.google.com/apppasswords)
-- **Invoice storage directory**
+> **Gmail / Google Workspace**: Use an **App Password** (create at https://myaccount.google.com/apppasswords).
+> If App Passwords are disabled, your regular password works if IMAP is enabled.
 
-### 2. Or configure manually
+### 2. Configure your accounts
 
-Edit `scripts/config.json` with your IMAP credentials:
+Edit `scripts/config.json` — add each account under `accounts.list`:
 
 ```json
 {
-  "imap": {
-    "server": "imap.gmail.com",
-    "port": 993,
-    "use_ssl": true,
-    "username": "your.email@gmail.com",
-    "password": "your-app-password"
+  "password_source": {
+    "method": "keychain",
+    "service": "email-manager"
   },
-  "filters": {
-    "max_emails": 50,
-    "fetch_days_back": 7,
-    "include_seen": false,
-    "folders": ["INBOX"]
-  },
-  "invoices": {
-    "storage_dir": "/path/to/invoice/storage",
-    "auto_extract": true,
-    "save_attachments": true
+  "accounts": {
+    "active": ["user@example.com", "other@domain.com"],
+    "list": {
+      "user@example.com": {
+        "imap": {
+          "server": "imap.gmail.com",
+          "port": 993,
+          "use_ssl": true,
+          "username": "user@example.com"
+        },
+        "filters": {
+          "max_emails": 50,
+          "fetch_days_back": 7,
+          "include_seen": false,
+          "folders": ["INBOX"]
+        },
+        "invoices": {
+          "storage_dir": "/path/to/invoices",
+          "auto_extract": true,
+          "save_attachments": true
+        },
+        "protected_senders": {
+          "list": ["noreply@newsletter.com"]
+        },
+        "routing": {
+          "rules": []
+        }
+      },
+      "other@domain.com": {
+        "imap": {
+          "server": "imap.gmail.com",
+          "port": 993,
+          "use_ssl": true,
+          "username": "other@domain.com"
+        },
+        "filters": {
+          "max_emails": 50,
+          "fetch_days_back": 7,
+          "include_seen": false,
+          "folders": ["INBOX"]
+        },
+        "invoices": {
+          "storage_dir": "/path/to/invoices",
+          "auto_extract": true,
+          "save_attachments": true
+        },
+        "protected_senders": {
+          "list": []
+        },
+        "routing": {
+          "rules": []
+        }
+      }
+    }
   }
 }
 ```
+
+**No passwords in config.json** — only in Keychain.
 
 ### 3. Customize categories (optional)
 
@@ -66,7 +107,7 @@ Edit `references/CATEGORIES.md` to add/remove categories that match your workflo
 
 ### Step 1 — Fetch Emails
 
-Run the fetch script to get recent unseen emails as structured JSON:
+Run the fetch script to get recent unseen emails from **all configured accounts**:
 
 ```bash
 cd ~/.agents/skills/email-manager
@@ -75,6 +116,9 @@ python3 scripts/fetch_emails.py scripts/config.json
 
 Options:
 ```bash
+# Fetch a single account only
+python3 scripts/fetch_emails.py scripts/config.json --account=user@example.com
+
 # Fetch from a specific folder
 python3 scripts/fetch_emails.py scripts/config.json --folder=INBOX
 
@@ -169,21 +213,19 @@ Then process the JSON and present a **Daily Review** in this format:
 📥 RECEIVED TODAY (15 emails)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+📧 Account 1: user@example.com (8 emails)
+
 🔴 Priority Items:
   1. [Subject] — [Sender]
      → Why it matters, what action is needed
-  2. [Subject] — [Sender]
+  ...
+
+📧 Account 2: other@domain.com (7 emails)
+
+🔴 Priority Items:
+  1. [Subject] — [Sender]
      → Why it matters, what action is needed
-
-📁 By Category:
-  • Invoices/Finance: 3 (2 new invoices, 1 payment confirmation)
-  • Clients: 2 (1 project update, 1 new inquiry)
-  • Operations: 4 (2 deployments, 1 security alert, 1 system notice)
-  • Personal/Other: 6 (3 newsletters, 2 social, 1 personal)
-
-💰 Invoices Detected:
-  • [Vendor Name] — €XXX.XX — due date — status
-  • [Vendor Name] — €XXX.XX — due date — status
+  ...
 
 📊 Summary: 2 urgent items, 3 follow-ups needed, 5 informational, 2 to archive
 ```
@@ -448,30 +490,67 @@ IT/GitHub
 
 ### Protecting Senders
 
-Update `scripts/config.json` whenever the user says "keep" or "don't delete":
+Update `scripts/config.json` whenever the user says "keep" or "don't delete".
+Find the account in `accounts.list.<email>.protected_senders`:
 
 ```json
-"protected_senders": {
-  "list": [
-    "noreply@newsletter.com",
-    "no-reply@tickets.vendor.com",
-    "invoices@provider.com"
-  ]
+{
+  "accounts": {
+    "list": {
+      "user@example.com": {
+        "protected_senders": {
+          "list": [
+            "noreply@newsletter.com",
+            "no-reply@tickets.vendor.com",
+            "invoices@provider.com"
+          ]
+        },
+        "routing": {
+          "rules": [
+            {"sender": "invoices@provider.com", "folder": "Finance/Invoices"}
+          ]
+        }
+      }
+    }
+  }
 }
 ```
 
-Also add routing rules for predictable senders (e.g., invoices → Finance, cloud provider → IT) in the `routing.rules` section.
+Also add routing rules for predictable senders (e.g., invoices → Finance, cloud provider → IT) in the `accounts.list.<email>.routing.rules` section.
 
 ---
+
+### Keychain Helper Function
+
+```python
+import subprocess
+def get_password(email, service="email-manager"):
+    result = subprocess.run(
+        ["security", "find-generic-password", "-a", email, "-s", service, "-w"],
+        capture_output=True, text=True, check=True
+    )
+    return result.stdout.strip()
+```
 
 ### Complete Python Template (Delete All)
 
 ```python
-import imaplib
+import imaplib, json, subprocess
 with open('/path/to/config.json') as f:
-    import json; cfg = json.load(f)
-mail = imaplib.IMAP4_SSL(cfg['imap']['server'], cfg['imap']['port'])
-mail.login(cfg['imap']['username'], cfg['imap']['password'])
+    cfg = json.load(f)
+
+# Get password from Keychain (or from config.imap for legacy)
+email = "sender@example.com"
+password = subprocess.run(
+    ["security", "find-generic-password", "-a", email, "-s", "email-manager", "-w"],
+    capture_output=True, text=True
+).stdout.strip()
+
+# Or use single-account legacy config with password in config (fallback)
+imap_cfg = cfg.get("imap", {})
+
+mail = imaplib.IMAP4_SSL(imap_cfg["server"], imap_cfg.get("port", 993))
+mail.login(imap_cfg["username"], password or imap_cfg.get("password", ""))
 mail.select('INBOX')
 
 s, d = mail.uid('SEARCH', None, 'FROM', 'sender@example.com')
@@ -487,6 +566,7 @@ mail.logout()
 ### Complete Python Template (Move & Delete)
 
 ```python
+# Same setup: get password from Keychain, login
 s, d = mail.uid('SEARCH', None, 'FROM', 'sender@example.com')
 uids = d[0].split()
 chunk = 50
@@ -509,14 +589,16 @@ mail.expunge()
 - ❌ **Don't use `mail.select('[Gmail]/All Mail')`** — it fails. Use raw command: `mail._simple_command('SELECT', '"[Gmail]/All Mail"')` then set `mail.state = 'SELECTED'`
 - ❌ **Don't unsubscribe if sender is in `protected_senders`**
 - ❌ **Don't use `SUBJECT` search with special characters (é, à, etc.)** — IMAP can't encode them. Use `TEXT` search instead or scan UIDs
+- ❌ **Don't store passwords in config files** — Always use macOS Keychain via `security find-generic-password`
 ```
 
 ---
 
 ## 🔐 Security Notes
 
-- **Credentials**: Your IMAP password is stored in `scripts/config.json`. Keep this file secure — don't commit it to git. The setup script stores it with restricted permissions.
-- **App Passwords**: For Gmail, always use an App Password, not your main password. Create one at https://myaccount.google.com/apppasswords
+- **Passwords are in macOS Keychain** — Never stored in config files. Use `security add-generic-password -a "email" -s "email-manager" -w "password"` to add/update.
+- **config.json has no passwords** — It only references the email address; the script retrieves the password from Keychain at runtime.
+- **App Passwords**: For Gmail, prefer an App Password (https://myaccount.google.com/apppasswords). If disabled, your regular password works if IMAP is enabled.
 - **IMAP access**: Some providers require "Less secure app access" or specific IMAP settings. Check your provider's documentation.
 - **Invoice storage**: Ensure the invoice directory has appropriate backups.
 
@@ -537,11 +619,27 @@ mail.expunge()
 email-manager/
 ├── SKILL.md                    ← This file — skill instructions
 ├── scripts/
-│   ├── config.json             ← Edit with your IMAP credentials
-│   ├── fetch_emails.py         ← IMAP fetcher → JSON
+│   ├── config.json             ← Account config (no passwords!)
+│   ├── fetch_emails.py         ← Multi-account IMAP fetcher → JSON
 │   ├── extract_invoices.py     ← Invoice detection & metadata
-│   └── setup.sh                ← One-time interactive setup
+│   └── setup.sh                ← One-time interactive setup (legacy)
 ├── references/
 │   ├── CATEGORIES.md           ← Category taxonomy (edit to customize)
 │   └── user_preferences.json   ← Learned categorization rules (auto-created)
+```
+
+## 🔑 Keychain Commands Reference
+
+```bash
+# Add / update a password
+security add-generic-password -a "user@example.com" -s "email-manager" -w "password" -U
+
+# Retrieve a password (used by scripts)
+security find-generic-password -a "user@example.com" -s "email-manager" -w
+
+# Delete a password
+security delete-generic-password -a "user@example.com" -s "email-manager"
+
+# List all stored email passwords
+security dump-keychain | grep -A1 "email-manager"
 ```

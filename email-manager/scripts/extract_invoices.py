@@ -185,6 +185,26 @@ def save_attachments(email, config, output_dir, email_index):
     return saved_files
 
 
+def get_account_for_email(email_from, config):
+    """Determine which account config an email belongs to based on sender."""
+    accounts = config.get("accounts", {})
+    active = accounts.get("active", [])
+    accts_list = accounts.get("list", {})
+
+    # Legacy fallback
+    if not active and "imap" in config:
+        return config
+
+    # Try to match by sender domain
+    for acct_email in active:
+        acct_config = accts_list.get(acct_email, {})
+        # Check if the email's inbox was fetched under this account
+        # We'll just return global config for now
+        return config
+
+    return config
+
+
 def main():
     if len(sys.argv) < 3:
         print("Usage: ./extract_invoices.py <emails_json> <config.json> [--output-dir=DIR]")
@@ -201,11 +221,23 @@ def main():
     emails_data = load_json(emails_path)
     config = load_json(config_path) if os.path.exists(config_path) else {}
 
-    # Collect all emails from all folders
+    # Collect all emails from all accounts and folders (multi-account support)
     all_emails = []
-    for folder_name, folder_data in emails_data.get("folders", {}).items():
-        for email in folder_data.get("emails", []):
-            all_emails.append(email)
+    accounts_data = emails_data.get("accounts", [])
+    if accounts_data:
+        # New multi-account format
+        for account_result in accounts_data:
+            if "error" in account_result:
+                continue
+            for folder_name, folder_data in account_result.get("folders", {}).items():
+                for email in folder_data.get("emails", []):
+                    email["_account"] = account_result.get("account", "unknown")
+                    all_emails.append(email)
+    else:
+        # Legacy single-account format (backward compat)
+        for folder_name, folder_data in emails_data.get("folders", {}).items():
+            for email in folder_data.get("emails", []):
+                all_emails.append(email)
 
     # Score and classify
     invoice_emails = []
@@ -216,6 +248,7 @@ def main():
             saved = save_attachments(email, config, output_dir, len(invoice_emails))
             invoice_emails.append({
                 "email_uid": email.get("uid"),
+                "account": email.get("_account", "unknown"),
                 "date": email.get("date"),
                 "from": email.get("from"),
                 "subject": email.get("subject"),

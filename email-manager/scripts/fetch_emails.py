@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Email Manager — Fetch Emails via IMAP
+Email Manager — Fetch Emails via IMAP (Multi-Account + macOS Keychain)
 Part of the email-manager skill for pi.
 
 Usage:
@@ -11,26 +11,25 @@ Options:
   --days=N          Override fetch_days_back from config
   --max=N           Override max_emails from config
   --folder=FOLDER   Override folder (default: INBOX)
-  --search=QUERY    IMAP search query (e.g. "FROM example.com SINCE 1-May-2026")
+  --search=QUERY    IMAP search query
+  --account=EMAIL   Fetch only one account (email address)
   --help            Show this message
 
 Output: JSON to stdout with structure:
   {
-    "account": "...",
-    "total": N,
-    "unread": N,
-    "emails": [
+    "accounts": [
       {
-        "uid": "...",
-        "message_id": "...",
-        "date": "ISO datetime",
-        "from": "Name <email>",
-        "subject": "...",
-        "snippet": "First 200 chars of body",
-        "has_attachments": true/false,
-        "attachments": [{"filename": "invoice.pdf", "size": 12345, "type": "application/pdf"}],
-        "body_text": "Full plain text or stripped HTML (truncated to 5000 chars)",
-        "flags": ["\\Seen", "\\Flagged"]
+        "account": "...",
+        "fetched_at": "...",
+        "total": N,
+        "unread": N,
+        "folders": {
+          "INBOX": {
+            "total": N,
+            "unread": N,
+            "emails": [...]
+          }
+        }
       }
     ]
   }
@@ -46,10 +45,26 @@ from datetime import datetime, timedelta, timezone
 import html
 import re
 import os
+import subprocess
 import base64
 import quopri
 
 CONFIG_PATH = sys.argv[1] if len(sys.argv) > 1 else None
+
+
+def get_password_from_keychain(account, service="email-manager"):
+    """Retrieve a password from macOS Keychain."""
+    try:
+        result = subprocess.run(
+            ["security", "find-generic-password", "-a", account, "-s", service, "-w"],
+            capture_output=True, text=True, check=True
+        )
+        return result.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        print(json.dumps({
+            "error": f"Failed to get password from Keychain for {account}: {e.stderr.strip()}"
+        }), file=sys.stderr)
+        sys.exit(1)
 
 
 def load_config(path):
@@ -67,17 +82,61 @@ def parse_args(config):
         if arg.startswith("--mode="):
             cfg["_mode"] = arg.split("=", 1)[1]
         elif arg.startswith("--days="):
-            cfg["filters"]["fetch_days_back"] = int(arg.split("=", 1)[1])
+            cfg.setdefault("filters", {})["fetch_days_back"] = int(arg.split("=", 1)[1])
         elif arg.startswith("--max="):
-            cfg["filters"]["max_emails"] = int(arg.split("=", 1)[1])
+            cfg.setdefault("filters", {})["max_emails"] = int(arg.split("=", 1)[1])
         elif arg.startswith("--folder="):
-            cfg["filters"]["folders"] = [arg.split("=", 1)[1]]
+            cfg.setdefault("filters", {})["folders"] = [arg.split("=", 1)[1]]
         elif arg.startswith("--search="):
             cfg["_search"] = arg.split("=", 1)[1]
+        elif arg.startswith("--account="):
+            cfg["_account"] = arg.split("=", 1)[1]
         elif arg == "--help":
             print(__doc__)
             sys.exit(0)
     return cfg
+
+
+def get_accounts_to_process(config):
+    """Return list of account dicts to process based on config and CLI args."""
+    accounts_cfg = config.get("accounts", {})
+    active_emails = accounts_cfg.get("active", [])
+    accounts_list = accounts_cfg.get("list", {})
+    cli_account = config.get("_account")
+
+    # Legacy fallback: if no accounts config, use top-level imap
+    if not active_emails and "imap" in config:
+        fallback = config["imap"].copy()
+        fallback["_password"] = fallback.get("password", "")
+        fallback["_filters"] = config.get("filters", {})
+        fallback["_invoices"] = config.get("invoices", {})
+        return [(config["imap"]["username"], fallback)]
+
+    # Filter by --account if specified
+    if cli_account:
+        if cli_account not in accounts_list:
+            print(json.dumps({"error": f"Account '{cli_account}' not found in config.accounts.list"}), file=sys.stderr)
+            sys.exit(1)
+        active_emails = [cli_account]
+
+    results = []
+    for email_addr in active_emails:
+        if email_addr not in accounts_list:
+            continue
+        acct = accounts_list[email_addr].copy()
+        imap_cfg = acct.get("imap", {}).copy()
+
+        # Get password from Keychain
+        keychain_service = config.get("password_source", {}).get("service", "email-manager")
+        password = get_password_from_keychain(email_addr, keychain_service)
+
+        imap_cfg["password"] = password
+        imap_cfg["_filters"] = acct.get("filters", {})
+        imap_cfg["_invoices"] = acct.get("invoices", {})
+
+        results.append((email_addr, imap_cfg))
+
+    return results
 
 
 def decode_mime_header(value):
@@ -110,7 +169,6 @@ def get_body(msg):
 
             if filename:
                 fname = decode_mime_header(filename)
-                # Decode attachment payload
                 payload = part.get_payload(decode=True)
                 if payload is None:
                     payload = b""
@@ -128,7 +186,6 @@ def get_body(msg):
                     except (LookupError, UnicodeDecodeError):
                         body_text += payload.decode("utf-8", errors="replace")
             elif content_type == "text/html" and not body_text:
-                # Use HTML only if no plain text found
                 payload = part.get_payload(decode=True)
                 if payload:
                     charset = part.get_content_charset() or "utf-8"
@@ -136,7 +193,6 @@ def get_body(msg):
                         html_content = payload.decode(charset, errors="replace")
                     except (LookupError, UnicodeDecodeError):
                         html_content = payload.decode("utf-8", errors="replace")
-                    # Strip HTML tags
                     text = re.sub(r"<[^>]+>", " ", html_content)
                     text = html.unescape(text)
                     text = re.sub(r"\s+", " ", text).strip()
@@ -153,12 +209,10 @@ def get_body(msg):
     return body_text.strip(), attachments
 
 
-def build_search_criteria(config, folder="INBOX"):
+def build_search_criteria(filters, custom_search=None):
     """Build IMAP search criteria based on config."""
-    filters = config.get("filters", {})
     days_back = filters.get("fetch_days_back", 7)
     include_seen = filters.get("include_seen", False)
-    custom_search = config.get("_search")
 
     criteria = []
 
@@ -176,16 +230,14 @@ def build_search_criteria(config, folder="INBOX"):
     return criteria
 
 
-def fetch_emails(config):
-    """Connect to IMAP and fetch emails."""
-    imap_cfg = config["imap"]
-    filters = config.get("filters", {})
+def fetch_account_emails(email_addr, imap_cfg, filters, search_override=None):
+    """Connect to IMAP and fetch emails for one account."""
     max_emails = filters.get("max_emails", 50)
     folders = filters.get("folders", ["INBOX"])
-    _mode = config.get("_mode", "fetch")
+    _mode = search_override
 
-    results = {
-        "account": imap_cfg.get("username", "unknown"),
+    result = {
+        "account": email_addr,
         "fetched_at": datetime.now(timezone.utc).isoformat(),
         "total": 0,
         "unread": 0,
@@ -198,20 +250,20 @@ def fetch_emails(config):
             mail = imaplib.IMAP4_SSL(imap_cfg["server"], imap_cfg.get("port", 993))
         else:
             mail = imaplib.IMAP4(imap_cfg["server"], imap_cfg.get("port", 143))
-        
+
         mail.login(imap_cfg["username"], imap_cfg["password"])
 
         for folder in folders:
             folder_emails = []
             status, _ = mail.select(folder)
             if status != "OK":
-                results["folders"][folder] = {"error": f"Cannot select folder: {folder}"}
+                result["folders"][folder] = {"error": f"Cannot select folder: {folder}"}
                 continue
 
             # Get total messages
             status, data = mail.search(None, "ALL")
             if status != "OK":
-                results["folders"][folder] = {"error": "Search failed"}
+                result["folders"][folder] = {"error": "Search failed"}
                 continue
 
             total_in_folder = len(data[0].split()) if data[0] else 0
@@ -221,11 +273,11 @@ def fetch_emails(config):
             unread_in_folder = len(unread_data[0].split()) if unread_data[0] else 0
 
             # Build search criteria
-            search_criteria = build_search_criteria(config, folder)
+            search_criteria = build_search_criteria(filters, search_override)
             status, msg_ids = mail.uid("SEARCH", None, *search_criteria)
 
             if status != "OK" or not msg_ids[0]:
-                results["folders"][folder] = {
+                result["folders"][folder] = {
                     "total": total_in_folder,
                     "unread": unread_in_folder,
                     "emails": []
@@ -251,7 +303,7 @@ def fetch_emails(config):
                     continue
 
                 msg = email.message_from_bytes(raw_email)
-                
+
                 # Parse email
                 subject = decode_mime_header(msg.get("Subject", "(no subject)"))
                 from_ = decode_mime_header(msg.get("From", "(unknown)"))
@@ -294,35 +346,52 @@ def fetch_emails(config):
 
                 folder_emails.append(email_data)
 
-            results["folders"][folder] = {
+            result["folders"][folder] = {
                 "total": total_in_folder,
                 "unread": unread_in_folder,
                 "emails": folder_emails
             }
 
-            results["total"] += total_in_folder
-            results["unread"] += unread_in_folder
+            result["total"] += total_in_folder
+            result["unread"] += unread_in_folder
 
         mail.logout()
 
     except imaplib.IMAP4.error as e:
-        return {"error": f"IMAP error: {str(e)}", "account": imap_cfg.get("username", "unknown")}
+        return {"error": f"IMAP error: {str(e)}", "account": email_addr}
     except Exception as e:
-        return {"error": f"Connection error: {str(e)}", "account": imap_cfg.get("username", "unknown")}
+        return {"error": f"Connection error: {str(e)}", "account": email_addr}
 
-    return results
+    return result
 
 
 def main():
     if not CONFIG_PATH:
         print(__doc__)
         sys.exit(1)
-    
+
     config = load_config(CONFIG_PATH)
     config = parse_args(config)
-    
-    result = fetch_emails(config)
-    print(json.dumps(result, indent=2, ensure_ascii=False))
+
+    accounts = get_accounts_to_process(config)
+    results = {"accounts": []}
+
+    for email_addr, imap_cfg in accounts:
+        filters = imap_cfg.pop("_filters", config.get("filters", {}))
+        search_override = config.get("_search")
+
+        # Merge global CLI overrides
+        if "fetch_days_back" in config.get("filters", {}):
+            filters["fetch_days_back"] = config["filters"]["fetch_days_back"]
+        if "max_emails" in config.get("filters", {}):
+            filters["max_emails"] = config["filters"]["max_emails"]
+        if "folders" in config.get("filters", {}):
+            filters["folders"] = config["filters"]["folders"]
+
+        account_result = fetch_account_emails(email_addr, imap_cfg, filters, search_override)
+        results["accounts"].append(account_result)
+
+    print(json.dumps(results, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":
