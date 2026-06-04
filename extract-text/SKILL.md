@@ -50,6 +50,14 @@ Do not commit `.env`. The repository `.gitignore` ignores `.env` files.
 ./extract-text.sh --format json document.pdf
 ```
 
+## 🚫 No cached content inside this skill folder
+
+The `.text_content/` directory (or any output/cache directory) **must never exist inside this skill folder**. 
+
+By default, `extract-text.sh` writes output files **next to each input file** in the **workspace directory** where the skill is called. If you want a specific output directory, use `--output-dir ./somewhere` — always relative to the workspace, never to `~/.agents/skills/extract-text/`.
+
+This keeps the shared skill repository clean of personal cached data.
+
 ## Output files
 
 By default, outputs are written next to each input file:
