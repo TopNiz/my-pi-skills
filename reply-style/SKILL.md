@@ -14,16 +14,17 @@ Drafts replies to messages by learning **your personal writing style per contact
 
 ### Prerequisites
 
-Your email password is already stored in macOS Keychain (from the [email-manager](../email-manager/SKILL.md) skill setup):
+Your email password is already stored in macOS Keychain (from the [email-manager](../email-manager/SKILL.md) skill setup).
+Use the email you configured in `config/signature.json`:
 
 ```bash
-security find-generic-password -a "your@email.com" -s "email-manager" -w
+security find-generic-password -a "your.email@example.com" -s "email-manager" -w
 ```
 
 If it's not there yet, add it:
 
 ```bash
-security add-generic-password -a "your@email.com" -s "email-manager" -w "YOUR_APP_PASSWORD" -U
+security add-generic-password -a "your.email@example.com" -s "email-manager" -w "YOUR_APP_PASSWORD" -U
 ```
 
 ### Step 1 — Fetch Your Sent Messages
@@ -162,6 +163,10 @@ Your signature is an important part of every email. There are **two versions** �
 
 Use **HTML signatures** when sending HTML-formatted replies. Use **plain text signatures** when sending plain text replies.
 
+> **Personal data**: Your real phone, email, and social links are stored in `config/signature.json` (gitignored).
+> Copy `config/signature.example.json` to `config/signature.json` and fill in your details.
+> The templates below use placeholders — the script will substitute real values from the config.
+
 #### French signature — HTML (for all French HTML replies)
 
 Uses your Apple Mail signature colors: **blue `#253887`** and **orange `#ff9300`**.
@@ -171,14 +176,14 @@ Uses your Apple Mail signature colors: **blue `#253887`** and **orange `#ff9300`
   <span style="font-size: 16px;">
     <b><font style="color: rgb(37, 56, 135);">Upgrade-code .&nbsp;</font><font color="#ff9300">org</font></b>
   </span><br>
-  <b style="color: rgb(37, 56, 135);">Nizar AYED</b><br>
-  <font color="#253887">Digital Coach</font><br>
+  <b style="color: rgb(37, 56, 135);">{{NAME}}</b><br>
+  <font color="#253887">{{TITLE}}</font><br>
   <br>
-  <font color="#253887">FR Mobile :&nbsp;<span>+33 X XX XX XX XX</span></font><br>
-  <font color="#253887">eMail :&nbsp;<a href="mailto:your@email.com" style="color: rgb(37, 56, 135);">your@email.com</a></font><br>
-  <font color="#253887">Facebook :&nbsp;<a href="https://www.facebook.com/upgradecode" style="color: rgb(37, 56, 135);">https://www.facebook.com/upgradecode</a></font><br>
-  <font color="#253887">Twitter :&nbsp;<a href="https://twitter.com/Upgrade_Code" style="color: rgb(37, 56, 135);">https://twitter.com/Upgrade_Code</a></font><br>
-  <font color="#253887">Web :&nbsp;<a href="http://www.upgrade-code.org" style="color: rgb(37, 56, 135);">http://www.upgrade-code.org</a></font>
+  <font color="#253887">FR Mobile :&nbsp;<span>{{PHONE}}</span></font><br>
+  <font color="#253887">eMail :&nbsp;<a href="mailto:{{EMAIL}}" style="color: rgb(37, 56, 135);">{{EMAIL}}</a></font><br>
+  <font color="#253887">Facebook :&nbsp;<a href="{{FACEBOOK}}" style="color: rgb(37, 56, 135);">{{FACEBOOK}}</a></font><br>
+  <font color="#253887">Twitter :&nbsp;<a href="{{TWITTER}}" style="color: rgb(37, 56, 135);">{{TWITTER}}</a></font><br>
+  <font color="#253887">Web :&nbsp;<a href="{{WEBSITE}}" style="color: rgb(37, 56, 135);">{{WEBSITE}}</a></font>
   <br><br>
   <font color="#999" style="font-size: 11px;">🤖 Message généré par IA et approuvé par lui ✨</font>
 </div>
@@ -187,15 +192,14 @@ Uses your Apple Mail signature colors: **blue `#253887`** and **orange `#ff9300`
 #### French signature — Plain text (for French plain text replies)
 
 ```
-Upgrade-code . org
-Nizar AYED
-Digital Coach
+{{NAME}}
+{{TITLE}}
 
-FR Mobile :	+33 X XX XX XX XX
-eMail:		your@email.com
-Facebook : 	https://www.facebook.com/upgradecode
-Twitter : 		https://twitter.com/Upgrade_Code
-Web:		http://www.upgrade-code.org
+FR Mobile :	{{PHONE}}
+eMail:		{{EMAIL}}
+Facebook : 	{{FACEBOOK}}
+Twitter : 		{{TWITTER}}
+Web:		{{WEBSITE}}
 🤖 Message généré par IA et approuvé par lui ;-)
 ```
 
@@ -208,12 +212,12 @@ Same Apple Mail styling, adapted for English.
   <span style="font-size: 16px;">
     <b><font style="color: rgb(37, 56, 135);">Upgrade-code&nbsp;</font><font color="#ff9300">.org</font></b>
   </span><br>
-  <b style="color: rgb(37, 56, 135);">Nizar Ayed</b><br>
-  <font color="#253887">Digital Coach</font><br>
+  <b style="color: rgb(37, 56, 135);">{{NAME}}</b><br>
+  <font color="#253887">{{TITLE}}</font><br>
   <br>
-  <font color="#253887">Tel :&nbsp;<span>+33 X XX XX XX XX</span></font><br>
-  <font color="#253887">Email :&nbsp;<a href="mailto:your@email.com" style="color: rgb(37, 56, 135);">your@email.com</a></font><br>
-  <font color="#253887">Web :&nbsp;<a href="http://www.upgrade-code.org" style="color: rgb(37, 56, 135);">www.upgrade-code.org</a></font>
+  <font color="#253887">Tel :&nbsp;<span>{{PHONE}}</span></font><br>
+  <font color="#253887">Email :&nbsp;<a href="mailto:{{EMAIL}}" style="color: rgb(37, 56, 135);">{{EMAIL}}</a></font><br>
+  <font color="#253887">Web :&nbsp;<a href="{{WEBSITE}}" style="color: rgb(37, 56, 135);">{{WEBSITE}}</a></font>
   <br><br>
   <font color="#999" style="font-size: 11px;">🤖 AI generated message and approved by him ✨</font>
 </div>
@@ -222,13 +226,12 @@ Same Apple Mail styling, adapted for English.
 #### English signature — Plain text (for English plain text replies)
 
 ```
-Upgrade-code.org
-Nizar Ayed
-Digital Coach
+{{NAME}}
+{{TITLE}}
 
-Tel: 06 XX XX XX XX
-Email: your@email.com
-www.upgrade-code.org
+Tel: {{PHONE}}
+Email: {{EMAIL}}
+{{WEBSITE}}
 🤖 AI generated message and approved by him ;-)
 ```
 
@@ -347,7 +350,7 @@ reply-style/
 ├── contacts/                      ← Auto-created contact database
 │   ├── index.json                 ← Master contact list with categories
 │   └── messages/                  ← Per-contact message files
-│       ├── nizar_gmail_com.json   ← Messages sent to nizar@gmail.com
+│       ├── user_gmail_com.json    ← Messages sent to user@gmail.com
 │       ├── sarah_company_com.json ← Messages sent to sarah@company.com
 │       └── ...
 └── references/

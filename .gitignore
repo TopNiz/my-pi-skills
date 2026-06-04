@@ -1,6 +1,7 @@
 # Secrets & credentials
 .env
 **/config.json
+**/signature.json
 **/credentials.json
 **/token.json
 **/user_preferences.json

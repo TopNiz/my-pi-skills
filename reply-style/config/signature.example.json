@@ -1,0 +1,12 @@
+{
+  "_note": "Copy this to signature.json and fill in your real contact details.",
+  "_instructions": "cp signature.example.json signature.json && chmod 600 signature.json",
+
+  "name": "Your Name",
+  "title": "Your Title",
+  "phone": "+33 6 00 00 00 00",
+  "email": "your.email@example.com",
+  "website": "https://www.your-site.com",
+  "facebook": "https://www.facebook.com/yourpage",
+  "twitter": "https://twitter.com/yourhandle"
+}

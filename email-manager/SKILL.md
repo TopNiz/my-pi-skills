@@ -116,7 +116,7 @@ python3 scripts/fetch_emails.py scripts/config.json
 
 Options:
 ```bash
-# Fetch a single account only
+# Fetch a single account only (use the email key from config.json's accounts.list)
 python3 scripts/fetch_emails.py scripts/config.json --account=user@example.com
 
 # Fetch from a specific folder
