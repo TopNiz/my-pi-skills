@@ -217,6 +217,8 @@ Same Apple Mail styling, adapted for English.
   <br>
   <font color="#253887">Tel :&nbsp;<span>{{PHONE}}</span></font><br>
   <font color="#253887">Email :&nbsp;<a href="mailto:{{EMAIL}}" style="color: rgb(37, 56, 135);">{{EMAIL}}</a></font><br>
+  <font color="#253887">Facebook :&nbsp;<a href="{{FACEBOOK}}" style="color: rgb(37, 56, 135);">{{FACEBOOK}}</a></font><br>
+  <font color="#253887">Twitter :&nbsp;<a href="{{TWITTER}}" style="color: rgb(37, 56, 135);">{{TWITTER}}</a></font><br>
   <font color="#253887">Web :&nbsp;<a href="{{WEBSITE}}" style="color: rgb(37, 56, 135);">{{WEBSITE}}</a></font>
   <br><br>
   <font color="#999" style="font-size: 11px;">🤖 AI generated message and approved by him ✨</font>
@@ -231,6 +233,8 @@ Same Apple Mail styling, adapted for English.
 
 Tel: {{PHONE}}
 Email: {{EMAIL}}
+Facebook : {{FACEBOOK}}
+Twitter : {{TWITTER}}
 {{WEBSITE}}
 🤖 AI generated message and approved by him ;-)
 ```
