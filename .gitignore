@@ -9,3 +9,8 @@
 *.pyc
 *.pyo
 .DS_Store
+
+# Personal data — never commit
+reply-style/contacts/
+extract-text/.text_content/
+email-manager/instructions/
