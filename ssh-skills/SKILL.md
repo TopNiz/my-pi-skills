@@ -68,7 +68,21 @@ cat local-file.txt | ssh -o RemoteCommand=none -o RequestTTY=no <host-alias> "ca
 
 > **Agent note**: Many personal SSH configs start tmux/shell setup via `RemoteCommand` and may force a TTY for interactive use. That is convenient for humans but inconvenient for agents and scripts. For non-interactive remote checks, prefer `-o RemoteCommand=none -o RequestTTY=no` so the requested command runs directly and exits cleanly.
 
-### 3. File Transfer — SCP
+### 3. ⚠️ Resolve the effective user — read the WHOLE config
+
+**Always read the full SSH config file** (`~/.ssh/config`) to determine the effective user for a host. Do NOT rely only on the lines matching the target host — many hosts lack an explicit `User` directive and inherit it from the global `Host *` defaults block at the bottom of the file.
+
+```bash
+# See effective config for a host (includes defaults)
+ssh -G <host-alias> | grep -E "^(hostname|user|port|identityfile)"
+
+# Read the full config: especially the Host * defaults at the bottom
+cat ~/.ssh/config
+```
+
+**Common mistake**: Grepping just the host block (`grep -A10 "Host <name>" ~/.ssh/config`) misses the `User` inherited from `Host *` at the end of the file.
+
+### 4. File Transfer — SCP
 
 ```bash
 # Push: local → remote
@@ -86,7 +100,7 @@ scp <ubuntu-server>:/var/log/syslog ./logs/
 scp -r ./configs/ <vm-fedora>:/etc/my-app/
 ```
 
-### 4. File Transfer — RSYNC (resumable, efficient)
+### 5. File Transfer — RSYNC (resumable, efficient)
 
 ```bash
 # Sync local → remote (archive, compress, verbose)
@@ -105,7 +119,7 @@ rsync -avz --delete <local-dir>/ <host-alias>:<remote-dir>/
 rsync -avz --exclude='.git/' --exclude='node_modules/' <dir>/ <host-alias>:<dir>/
 ```
 
-### 5. SSH Tunneling / Port Forwarding
+### 6. SSH Tunneling / Port Forwarding
 
 ```bash
 # Local port forwarding: local:PORT → remote:HOST:PORT
@@ -131,7 +145,7 @@ ssh -D 1080 <remote-server-1>
 # Configure browser to use SOCKS5 proxy at localhost:1080
 ```
 
-### 6. Jump Host / ProxyJump
+### 7. Jump Host / ProxyJump
 
 ```bash
 # Connect through a bastion/jump host
