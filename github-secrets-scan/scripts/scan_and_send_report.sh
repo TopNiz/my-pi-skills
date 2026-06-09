@@ -493,6 +493,7 @@ PYEOF
 echo "  ✅ Email body sauvegardé : $EMAIL_BODY"
 
 # ── Step 5: Send email ──
+EMAIL_SUBJECT="🔒 Rapport Scan Secrets GitHub — ${DATE_HUMAN}"
 echo ""
 echo "📤 Sending email..."
 
