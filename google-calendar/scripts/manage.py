@@ -50,13 +50,23 @@ def find_calendar_id(service, name_or_id):
 def create_event(service, args):
     cal_id = find_calendar_id(service, args.calendar or "primary")
 
+    # Detect IANA timezone
+    try:
+        from zoneinfo import ZoneInfo
+        import subprocess
+        tz = subprocess.run(["readlink", "/etc/localtime"], capture_output=True, text=True).stdout.strip()
+        tz = tz.replace("/var/db/timezone/zoneinfo/", "") if tz else "Europe/Paris"
+        ZoneInfo(tz)  # validate
+    except Exception:
+        tz = "Europe/Paris"
+
     # Build start/end
     if args.start and ":" in args.start:
-        start_dt = datetime.strptime(f"{args.date} {args.start}", "%Y-%m-%d %H:%M").astimezone()
+        start_dt = datetime.strptime(f"{args.date} {args.start}", "%Y-%m-%d %H:%M")
         end_str   = args.end or (start_dt + timedelta(hours=1)).strftime("%H:%M")
-        end_dt    = datetime.strptime(f"{args.date} {end_str}", "%Y-%m-%d %H:%M").astimezone()
-        start_body = {"dateTime": start_dt.isoformat(), "timeZone": str(start_dt.tzinfo)}
-        end_body   = {"dateTime": end_dt.isoformat(),   "timeZone": str(end_dt.tzinfo)}
+        end_dt    = datetime.strptime(f"{args.date} {end_str}", "%Y-%m-%d %H:%M")
+        start_body = {"dateTime": start_dt.isoformat(), "timeZone": tz}
+        end_body   = {"dateTime": end_dt.isoformat(),   "timeZone": tz}
     else:
         # All-day
         start_body = {"date": args.date}
@@ -84,17 +94,26 @@ def update_event(service, args):
     cal_id   = args.calendar_id or "primary"
     evt      = service.events().get(calendarId=cal_id, eventId=args.event_id).execute()
 
+    try:
+        from zoneinfo import ZoneInfo
+        import subprocess
+        tz = subprocess.run(["readlink", "/etc/localtime"], capture_output=True, text=True).stdout.strip()
+        tz = tz.replace("/var/db/timezone/zoneinfo/", "") if tz else "Europe/Paris"
+        ZoneInfo(tz)
+    except Exception:
+        tz = "Europe/Paris"
+
     if args.title:       evt["summary"]     = args.title
     if args.location:    evt["location"]    = args.location
     if args.description: evt["description"] = args.description
     if args.start:
         date_part = evt["start"].get("dateTime", evt["start"].get("date", ""))[:10]
-        start_dt  = datetime.strptime(f"{date_part} {args.start}", "%Y-%m-%d %H:%M").astimezone()
-        evt["start"] = {"dateTime": start_dt.isoformat(), "timeZone": str(start_dt.tzinfo)}
+        start_dt  = datetime.strptime(f"{date_part} {args.start}", "%Y-%m-%d %H:%M")
+        evt["start"] = {"dateTime": start_dt.isoformat(), "timeZone": tz}
     if args.end:
         date_part = evt["end"].get("dateTime", evt["end"].get("date", ""))[:10]
-        end_dt    = datetime.strptime(f"{date_part} {args.end}", "%Y-%m-%d %H:%M").astimezone()
-        evt["end"] = {"dateTime": end_dt.isoformat(), "timeZone": str(end_dt.tzinfo)}
+        end_dt    = datetime.strptime(f"{date_part} {args.end}", "%Y-%m-%d %H:%M")
+        evt["end"] = {"dateTime": end_dt.isoformat(), "timeZone": tz}
 
     updated = service.events().update(calendarId=cal_id, eventId=args.event_id, body=evt).execute()
     print(f"✅ Event updated: {updated.get('summary')}")
