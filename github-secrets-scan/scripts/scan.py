@@ -49,7 +49,7 @@ BUILTIN_PATTERNS = [
         "severity": "critical",
         "contexts": ["files", "commits"],
         "regex": r'(?i)(?:password|passwd|pwd)\s*[=:]\s*[\'"][^\'"\n]{4,}[\'"]',
-        "fp_contains": ["example", "placeholder", "password_hash", "hashed_password", "hash_password", "${TIKA", "${", "$(echo"],
+        "fp_contains": ["example", "placeholder", "password_hash", "hashed_password", "hash_password", "${TIKA", "${", "$(echo", "postgres", "supersecret", "secret123"],
     },
     {
         "name": "aws_access_key",
@@ -77,7 +77,7 @@ BUILTIN_PATTERNS = [
         "severity": "high",
         "contexts": ["files", "commits"],
         "regex": r'(?i)(?:api[_-]?key|api[_-]?secret|apikey)\s*[=:]\s*[\'"][^\'"]{8,}[\'"]',
-        "fp_contains": ["example", "placeholder", "replace-with", "your_", "YOUR_"],
+        "fp_contains": ["example", "placeholder", "replace-with", "your_", "YOUR_", "000000000000"],
     },
     {
         "name": "github_token",
@@ -140,7 +140,7 @@ BUILTIN_PATTERNS = [
         "severity": "high",
         "contexts": ["files", "commits"],
         "regex": r'https?://[^:/\s]+:[^@\s]+@',
-        "fp_contains": ["example.com"],
+        "fp_contains": ["example.com", "user:pass"],
     },
     {
         "name": "email_address",
@@ -274,10 +274,13 @@ def is_false_positive(pattern, value, filepath=""):
 
 
 def run_command(cmd, cwd=None, timeout=120, check=False):
-    """Run a shell command and return (returncode, stdout, stderr)."""
+    """Run a shell command and return (returncode, stdout, stderr).
+    
+    Uses errors='replace' to handle non-UTF-8 data in git output.
+    """
     try:
         result = subprocess.run(
-            cmd, capture_output=True, text=True, cwd=cwd,
+            cmd, capture_output=True, text=True, errors='replace', cwd=cwd,
             timeout=timeout
         )
         return result.returncode, result.stdout, result.stderr
@@ -709,59 +712,63 @@ def main():
             if not args.quiet:
                 print(f"  🔄 Scanning {repo_full}{fork_label}...", end=" ", flush=True)
             
-            depth = args.depth or account_config.get("depth", 50)
-            clone_path = shallow_clone(repo_full, work_dir, depth=depth)
-            
-            if not clone_path:
-                if not args.quiet:
-                    print("❌ clone failed")
+            try:
+                depth = args.depth or account_config.get("depth", 50)
+                clone_path = shallow_clone(repo_full, work_dir, depth=depth)
+                
+                if not clone_path:
+                    if not args.quiet:
+                        print("❌ clone failed")
+                    continue
+                
+                repo_findings = []
+                
+                # File content scan
+                if not args.no_files:
+                    for root, dirs, files in os.walk(clone_path):
+                        # Skip .git
+                        dirs[:] = [d for d in dirs if d != ".git"]
+                        for fname in files:
+                            fpath = os.path.join(root, fname)
+                            file_findings = scan_file(fpath, patterns, config)
+                            for ff in file_findings:
+                                ff["repo"] = repo_full
+                                ff["is_fork"] = is_fork
+                                # Make file path relative
+                                if fpath.startswith(clone_path):
+                                    ff["file"] = fpath[len(clone_path)+1:]
+                            repo_findings.extend(file_findings)
+                
+                # Commit history scan
+                if not args.no_commits:
+                    commit_findings = scan_commit_history(clone_path, patterns, config)
+                    for cf in commit_findings:
+                        cf["repo"] = repo_full
+                        cf["is_fork"] = is_fork
+                    repo_findings.extend(commit_findings)
+                
+                # Deduplicate
+                repo_findings = deduplicate_findings(repo_findings)
+                
+                # Sort by severity
+                repo_findings.sort(key=severity_sort_key)
+                
+                # Limit findings per repo
+                max_per_repo = config.get("scan", {}).get("max_findings_per_repo", 50)
+                repo_findings = repo_findings[:max_per_repo]
+                
+                if repo_findings:
+                    if not args.quiet:
+                        print(f"🔍 {len(repo_findings)} finding(s)")
+                    repos_scanned.append(repo_full)
+                    all_findings.extend(repo_findings)
+                else:
+                    if not args.quiet:
+                        print("✅ clean")
+                    clean_repos.append(repo_full)
+            except Exception as e:
+                print(f"❌ Error scanning {repo_full}: {e}", file=sys.stderr)
                 continue
-            
-            repo_findings = []
-            
-            # File content scan
-            if not args.no_files:
-                for root, dirs, files in os.walk(clone_path):
-                    # Skip .git
-                    dirs[:] = [d for d in dirs if d != ".git"]
-                    for fname in files:
-                        fpath = os.path.join(root, fname)
-                        file_findings = scan_file(fpath, patterns, config)
-                        for ff in file_findings:
-                            ff["repo"] = repo_full
-                            ff["is_fork"] = is_fork
-                            # Make file path relative
-                            if fpath.startswith(clone_path):
-                                ff["file"] = fpath[len(clone_path)+1:]
-                        repo_findings.extend(file_findings)
-            
-            # Commit history scan
-            if not args.no_commits:
-                commit_findings = scan_commit_history(clone_path, patterns, config)
-                for cf in commit_findings:
-                    cf["repo"] = repo_full
-                    cf["is_fork"] = is_fork
-                repo_findings.extend(commit_findings)
-            
-            # Deduplicate
-            repo_findings = deduplicate_findings(repo_findings)
-            
-            # Sort by severity
-            repo_findings.sort(key=severity_sort_key)
-            
-            # Limit findings per repo
-            max_per_repo = config.get("scan", {}).get("max_findings_per_repo", 50)
-            repo_findings = repo_findings[:max_per_repo]
-            
-            if repo_findings:
-                if not args.quiet:
-                    print(f"🔍 {len(repo_findings)} finding(s)")
-                repos_scanned.append(repo_full)
-                all_findings.extend(repo_findings)
-            else:
-                if not args.quiet:
-                    print("✅ clean")
-                clean_repos.append(repo_full)
     
     # Stats
     stats = {
