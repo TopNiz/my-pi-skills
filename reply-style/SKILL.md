@@ -241,7 +241,7 @@ Twitter : {{TWITTER}}
 
 > **Rule:** If the reply is in French → use the French signature. If the reply is in English → use the English signature. The language of the message dictates the signature language, regardless of the recipient.
 
-> **Format rule:** If replying to an HTML-formatted incoming email → use the HTML signature. If replying to a plain text incoming email → use the plain text signature. When in doubt, use plain text.
+> **Format rule:** All replies must be in **HTML format** with the HTML signature. Always use the HTML signature regardless of the incoming message format. Plain text replies are never acceptable.
 
 > **Short replies (1-2 sentences):** For very short replies (like "Bien reçu !" or "I'm there"), the signature is optional — match what you've done historically with that contact.
 
@@ -441,6 +441,120 @@ The script **auto-detects HTML** — if the body file contains HTML tags (`<p>`,
 When sending HTML, the script creates a `multipart/alternative` message containing both:
 - A plain text version (for email clients that don't render HTML)
 - The HTML version (for modern clients)
+
+### 🚨 Critical pitfall: Never pass a raw .eml / MIME file as the body
+
+`send_email.py` treats the body file as **content**, not as a raw email. If you pass a file containing MIME headers, multipart boundaries, or base64-encoded attachments, the script wraps that whole thing **inside another MIME message**, causing:
+- **Double-MIME corruption** — the raw .eml is re-encapsulated, making it unreadable
+- **Attachments lost** — base64 placeholders are sent literally instead of actual files
+- **Nested multipart garbage** — the recipient sees a garbled message
+
+✅ **Correct usage — body file contains ONLY the message text or HTML:**
+```bash
+# body.html contains <p>Bonjour...</p> — no MIME headers
+python3 send_email.py config.json "to@example.com" "Subject" /tmp/body.html --html
+```
+
+❌ **NEVER do this — body file is a raw .eml with MIME structure:**
+```bash
+# body.eml has Subject:/From:/To: headers + boundaries + base64
+python3 send_email.py config.json "to@example.com" "Subject" /tmp/body.eml --html  # ← BROKEN
+```
+
+### 🚨 Critical pitfall: `send_email.py` does NOT support attachments
+
+The script only handles `text/plain` or `text/html` bodies. If you need to attach files (PDF, images, etc.), you **must use Python's `smtplib` directly** with a `MIMEMultipart('mixed')` message:
+
+```python
+import smtplib, subprocess, json, base64, email.utils
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
+
+# Get password from keychain
+pw = subprocess.run(
+    ['security','find-generic-password','-a','your@email.com','-s','email-manager','-w'],
+    capture_output=True, text=True
+).stdout.strip()
+
+# Build mixed MIME
+msg = MIMEMultipart('mixed')
+msg["From"] = "your@email.com"
+msg["To"] = "recipient@example.com"
+msg["Subject"] = "Re: Subject"
+msg["Date"] = email.utils.formatdate(localtime=True)
+
+# Alternative body (plain + HTML)
+alt = MIMEMultipart('alternative')
+alt.attach(MIMEText("Hello", 'plain', 'utf-8'))
+alt.attach(MIMEText("<p>Hello</p>", 'html', 'utf-8'))
+msg.attach(alt)
+
+# PDF attachment
+with open("/path/to/file.pdf", 'rb') as f:
+    pdf_data = f.read()
+att = MIMEBase('application', 'pdf')
+att.set_payload(pdf_data)
+encoders.encode_base64(att)
+att.add_header('Content-Disposition', 'attachment', filename="document.pdf")
+msg.attach(att)
+
+# Send
+server = smtplib.SMTP("smtp.gmail.com", 587)
+server.starttls()
+server.login("your@email.com", pw)
+server.sendmail("your@email.com", ["recipient@example.com"], msg.as_string())
+server.quit()
+```
+
+**Double-check before sending:**
+1. Does the body file contain MIME headers or boundaries? → ❌ Must be clean HTML/text only
+2. Does the email need attachments? → ❌ Don't use `send_email.py` — use raw `smtplib` with `MIMEMultipart('mixed')`
+3. Is the body file a complete .eml? → ❌ Wrong tool — use IMAP APPEND to Drafts or raw SMTP instead
+
+### 🚨 Best practice: Reuse drafts instead of re-building
+
+If you created a draft in Gmail (via IMAP APPEND to `[Gmail]/Drafts`) and it looks correct, **fetch it and send it as-is** via SMTP instead of re-building the MIME from scratch. This avoids accidentally corrupting the structure.
+
+```python
+import imaplib, smtplib, subprocess
+
+# 1. Get credentials
+pw = subprocess.run(
+    ['security','find-generic-password','-a','your@email.com','-s','email-manager','-w'],
+    capture_output=True, text=True
+).stdout.strip()
+
+# 2. Connect via IMAP and find the draft
+m = imaplib.IMAP4_SSL("imap.gmail.com", 993)
+m.login("your@email.com", pw)
+m.select('"[Gmail]/Drafts"')
+# Search by subject or date, then get the draft UID
+s, d = m.uid('SEARCH', None, 'SUBJECT', 'Re: Subject')
+draft_uid = d[0].split()[-1].decode()
+
+# 3. Fetch the raw MIME of the draft
+s, d = m.uid('FETCH', draft_uid, '(RFC822)')
+raw_mime = d[0][1]  # complete, already well-formed with attachments
+m.logout()
+
+# 4. Send it as-is via SMTP (no re-construction!)
+server = smtplib.SMTP("smtp.gmail.com", 587)
+server.starttls()
+server.login("your@email.com", pw)
+server.sendmail("your@email.com", ["recipient@example.com"], raw_mime)
+server.quit()
+print("✅ Draft fetched and sent as-is — no re-construction needed.")
+```
+
+✅ **Why this is better:**
+- The draft was already validated visually in Gmail
+- No risk of re-building the MIME structure incorrectly
+- The attachment is guaranteed to be intact (you saw it in Gmail)
+- Faster — one fetch + one SMTP send, no template manipulation
+
+**Rule of thumb:** If you created a draft in Gmail and the user saw it there (or you visually verified it), **don't re-author it**. Just fetch and send.
 
 ### Save sent messages automatically
 
