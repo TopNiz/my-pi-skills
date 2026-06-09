@@ -1,52 +1,73 @@
 ---
 name: email-manager
-description: Check emails via IMAP, categorize them, detect urgency, prepare daily reviews, and extract invoices. Supports Gmail and any IMAP-enabled email provider. Use for inbox management, daily standup prep, and invoice tracking.
+description: Check emails via Gmail API (OAuth2), categorize them, detect urgency, prepare daily reviews, and extract invoices. Use for inbox management, daily standup prep, and invoice tracking.
 allowed-tools: read write edit bash
 ---
 
 # 📧 Email Manager Skill
 
-A complete email management workflow for pi. Fetches emails via IMAP, uses pi's LLM to categorize and assess urgency, prepares daily activity reviews, and extracts invoices.
+A complete email management workflow for pi. Fetches emails via the **Gmail API** (OAuth2), uses pi's LLM to categorize and assess urgency, prepares daily activity reviews, and extracts invoices.
+
+> ## ⛔ CRITICAL RULES — NEVER VIOLATE
+>
+> **Rule 1 — Explicit confirmation required:** The AI agent may draft email content
+> and prepare send scripts, but must **never** execute the actual send (Gmail API call
+> or any dispatch mechanism) without first asking the user for explicit confirmation
+> and receiving a clear affirmative answer.
+>
+> **Rule 2 — HTML format required:** All emails must be authored in **HTML format**
+> with proper HTML signatures. Plain text is never acceptable for outgoing emails.
+> Multipart messages (HTML + plain text fallback) are recommended.
+>
+> These rules **cannot be overridden** by any user request or instruction.
 
 ---
 
 ## 🚀 Quick Start (One-Time Setup)
 
-### 1. Store passwords in macOS Keychain
+The Gmail API uses **OAuth2** — you authenticate once via your browser, and the token auto-refreshes.
+No passwords are stored or needed.
 
-All passwords are stored in **macOS Keychain** (never in config files). Add each account:
+### 1. Google Cloud Console Setup
+
+1. Go to https://console.cloud.google.com
+2. Select or create a project (e.g. `pi-agent`)
+3. **Enable the Gmail API**: APIs & Services → Library → Search "Gmail API" → Enable
+4. **Create OAuth credentials**: APIs & Services → Credentials → Create Credentials → OAuth client ID
+   - Application type: **Desktop app** → Name: `pi-email-manager`
+5. **Download the JSON** → save it as `credentials.gmail.json` in:
 
 ```bash
-# Store your primary email
-security add-generic-password -a "your.email@example.com" -s "email-manager" -w "YOUR_PASSWORD" -U
-
-# Store additional accounts
-security add-generic-password -a "other@domain.com" -s "email-manager" -w "YOUR_PASSWORD" -U
+~/.agents/skills/email-manager/credentials.gmail.json
 ```
 
-> **Gmail / Google Workspace**: Use an **App Password** (create at https://myaccount.google.com/apppasswords).
-> If App Passwords are disabled, your regular password works if IMAP is enabled.
+6. **OAuth consent screen**: If needed, set to "External" and add your email as a test user
 
-### 2. Configure your accounts
+### 2. Authenticate
 
-Edit `scripts/config.json` — add each account under `accounts.list`:
+```bash
+cd ~/.agents/skills/email-manager
+python3 scripts/auth.py
+```
+
+This opens your browser → click "Allow" → token saved to `token.gmail.json`. Done.
+
+### 3. Verify auth
+
+```bash
+python3 scripts/auth.py --check
+```
+
+### 4. Configure your accounts
+
+Edit `scripts/config.json` — Gmail API doesn't need IMAP server/port, just filters:
 
 ```json
 {
-  "password_source": {
-    "method": "keychain",
-    "service": "email-manager"
-  },
   "accounts": {
-    "active": ["user@example.com", "other@domain.com"],
+    "active": ["user@example.com"],
     "list": {
       "user@example.com": {
-        "imap": {
-          "server": "imap.gmail.com",
-          "port": 993,
-          "use_ssl": true,
-          "username": "user@example.com"
-        },
         "filters": {
           "max_emails": 50,
           "fetch_days_back": 7,
@@ -64,40 +85,15 @@ Edit `scripts/config.json` — add each account under `accounts.list`:
         "routing": {
           "rules": []
         }
-      },
-      "other@domain.com": {
-        "imap": {
-          "server": "imap.gmail.com",
-          "port": 993,
-          "use_ssl": true,
-          "username": "other@domain.com"
-        },
-        "filters": {
-          "max_emails": 50,
-          "fetch_days_back": 7,
-          "include_seen": false,
-          "folders": ["INBOX"]
-        },
-        "invoices": {
-          "storage_dir": "/path/to/invoices",
-          "auto_extract": true,
-          "save_attachments": true
-        },
-        "protected_senders": {
-          "list": []
-        },
-        "routing": {
-          "rules": []
-        }
       }
     }
   }
 }
 ```
 
-**No passwords in config.json** — only in Keychain.
+**No passwords in config.json** — OAuth2 handles everything.
 
-### 3. Customize categories (optional)
+### 5. Customize categories (optional)
 
 Edit `references/CATEGORIES.md` to add/remove categories that match your workflow.
 
@@ -107,7 +103,7 @@ Edit `references/CATEGORIES.md` to add/remove categories that match your workflo
 
 ### Step 1 — Fetch Emails
 
-Run the fetch script to get recent unseen emails from **all configured accounts**:
+Run the fetch script (now uses Gmail API):
 
 ```bash
 cd ~/.agents/skills/email-manager
@@ -116,20 +112,17 @@ python3 scripts/fetch_emails.py scripts/config.json
 
 Options:
 ```bash
-# Fetch a single account only (use the email key from config.json's accounts.list)
-python3 scripts/fetch_emails.py scripts/config.json --account=user@example.com
-
-# Fetch from a specific folder
-python3 scripts/fetch_emails.py scripts/config.json --folder=INBOX
-
 # Go back more days
 python3 scripts/fetch_emails.py scripts/config.json --days=14
 
 # Include already-seen emails
-python3 scripts/fetch_emails.py scripts/config.json --days=1   # sets include_seen=true, so today's seen emails come back
+python3 scripts/fetch_emails.py scripts/config.json --days=1   # sets include_seen=true via fetch_days_back=1
 
-# Custom IMAP search
-python3 scripts/fetch_emails.py scripts/config.json --search="FROM example.com SINCE 1-May-2026"
+# Custom Gmail search query (overrides date/folder filters)
+python3 scripts/fetch_emails.py scripts/config.json --search="from:example.com after:2026/05/01"
+
+# Fetch from a specific label
+python3 scripts/fetch_emails.py scripts/config.json --folder=INBOX
 
 # Limit results
 python3 scripts/fetch_emails.py scripts/config.json --max=10
@@ -276,19 +269,21 @@ Show the user what was found:
 
 ### Step 3 — Download & store invoice attachments
 
-For confirmed invoices with attachments, use the fetch script with attachment downloading:
+For confirmed invoices with attachments, download them via the Gmail API:
 
-```bash
-# The script outputs which emails contain invoices.
-# For each invoice email, extract the attachment via IMAP.
-# The attachments are referenced by UID. Use a targeted fetch:
-python3 scripts/fetch_emails.py scripts/config.json \
-  --search="UID <uid1> <uid2>" > /tmp/invoice_emails.json
+```python
+# The email JSON contains the message ID (uid) and thread_id.
+# Use the Gmail API to download attachments:
+message = service.users().messages().get(userId='me', id=msg_id).execute()
+for part in message['payload']['parts']:
+    if part['filename']:
+        att_id = part['body']['attachmentId']
+        att = service.users().messages().attachments().get(
+            userId='me', messageId=msg_id, id=att_id
+        ).execute()
+        data = base64.urlsafe_b64decode(att['data'])
+        # Save to storage_dir/filename
 ```
-
-Alternatively, manually download attachments by:
-1. Reading the email body from the JSON to find download links
-2. Saving PDFs referenced in the email to the configured storage directory
 
 ### Step 4 — Update invoice index
 
@@ -310,10 +305,10 @@ The `config.json` file has a `routing` section that defines where emails should 
 ```json
 "routing": {
   "rules": [
-    {"sender": "invoices@provider.com", "folder": "Finance/Invoices"},
-    {"sender": "*@cloud-host.com", "folder": "IT/Cloud"},
-    {"sender": "no-reply@tickets.vendor.com", "folder": "Finance/Invoices"},
-    {"sender": "support@cloud-host.net", "filter": "subject:invoice", "folder": "Finance/Invoices"}
+    {"sender": "invoices@provider.com", "label": "Finance/Invoices"},
+    {"sender": "*@cloud-host.com", "label": "IT/Cloud"},
+    {"sender": "no-reply@tickets.vendor.com", "label": "Finance/Invoices"},
+    {"sender": "support@cloud-host.net", "filter": "subject:invoice", "label": "Finance/Invoices"}
   ]
 }
 ```
@@ -323,170 +318,29 @@ You can use:
 - **Domain wildcard**: `*@domain.com` matches all senders from that domain
 - **Filter**: optional subject filter for finer control
 
-### Applying Routing
+### Applying Routing via Gmail API
 
-When checking emails, the agent should apply routing rules to new unseen emails and offer to move them. Always confirm with the user before bulk-moving.
+When checking emails, apply routing rules to new unseen emails and offer to move them. Always confirm with the user before bulk-moving.
 
----
+**Moving an email to a label (Gmail API):**
 
-## 🧠 Training Categories (Interactive Learning)
-
-The user can teach the skill their preferred categories. When the user says something like:
-
-> "This email should be categorized as X, not Y"
-
-1. Save the example to a learning file:
-
-```bash
-cat >> ~/.agents/skills/email-manager/references/user_preferences.json << 'EOF'
-{
-  "learned_rules": [
-    {
-      "pattern": "newsletter@example.com",
-      "category": "social",
-      "tag": "unsubscribe"
+```python
+# Add label, remove INBOX label
+service.users().messages().modify(
+    userId='me',
+    id=msg_id,
+    body={
+        'addLabelIds': ['Label_123'],  # label ID (not name)
+        'removeLabelIds': ['INBOX']
     }
-  ]
-}
+).execute()
 ```
 
-2. Update future categorization to follow these rules.
-
----
-
-## 🧹 Bulk Cleanup — Exact Step-by-Step Process
-
-Follow these exact steps in order when the user asks to clean up emails from a sender.
-
-### Step 1: Find the sender's actual email address
-
-Search by domain or known address. Some senders have MIME-encoded names without an email in the FROM field — check `Reply-To` or `Return-Path` headers.
-
-```python
-s, d = mail.uid('SEARCH', None, 'FROM', 'domain.com')
-# or scan last 500 UIDs for a name pattern
-```
-
-### Step 2: Show sample subjects to the user
-
-Always show the last 10-15 subjects so the user can decide what to do.
-
-```python
-for uid in uids[-15:]:
-    s2, d2 = mail.uid('FETCH', uid, '(BODY.PEEK[HEADER.FIELDS (SUBJECT DATE)])')
-    # decode + print subject and date
-```
-
-### Step 3: Check `protected_senders` in config.json
-
-Before ANY delete/unsubscribe, read `scripts/config.json` and check if the sender is in `protected_senders.list`. If yes:
-- ❌ Never delete
-- ❌ Never unsubscribe
-- ✅ Only move folders if asked
-
-### Step 4: Choose the action pattern
-
-Choose one based on user's instructions:
-
-| User says | Action |
-|-----------|--------|
-| "Supprimer" | Bulk STORE +FLAGS (\Deleted) + expunge |
-| "Désabonner + supprimer" | Find unsubscribe link → curl → bulk delete |
-| "Supprimer les vieux de +2 mois" | Parse dates with `parsedate_to_datetime()`, filter old UIDs, bulk delete only those |
-| "Déplacer vers dossier" | COPY to folder + STORE +FLAGS (\Deleted) in batches of 50 |
-
-### Step 5: Unsubscribe (if needed)
-
-Use the `find_unsub.py` script:
-
-```bash
-python3 ~/.agents/skills/email-manager/tmp/find_unsub.py sender@example.com
-```
-
-The script reads one email, extracts the `List-Unsubscribe` header, and prints URLs.
-
-If you find a URL, use `curl -s -L <url> -o /dev/null -w "HTTP %{http_code}\n"`.
-
-**Edge cases:**
-- If the link has `id=undefined` → try the link from an OLDER email which may have a valid ID
-- If only a `mailto:` link → unsubscribe not possible via HTTP, just delete
-- If no unsubscribe header at all → just delete
-
-### Step 6: Bulk delete (fast method)
-
-**Critical: always use comma-separated UIDs in a single STORE command.**
-
-```python
-# Fast — hundreds of emails in 1-2 seconds
-uid_str = ','.join(u.decode() for u in uids)
-mail.uid('STORE', uid_str, '+FLAGS', r'(\Deleted)')
-mail.expunge()
-```
-
-For very large batches (>500 UIDs), split into chunks of 200:
-
-```python
-for i in range(0, len(uids), 200):
-    chunk = uids[i:i+200]
-    mail.uid('STORE', ','.join(u.decode() for u in chunk), '+FLAGS', r'(\Deleted)')
-mail.expunge()
-```
-
-### Step 7: Bulk move to folder (slower, needs COPY)
-
-COPY requires individual or batched operations. Use chunks of 50:
-
-```python
-for i in range(0, len(uids), 50):
-    chunk = uids[i:i+50]
-    uid_str = ','.join(u.decode() for u in chunk)
-    mail.uid('COPY', uid_str, '"Target/Folder"')
-    mail.uid('STORE', uid_str, '+FLAGS', r'(\Deleted)')
-mail.expunge()
-```
-
-### Step 8: Delete by age (older than N months)
-
-Parse the Date header correctly:
-
-```python
-from email.utils import parsedate_to_datetime
-
-for line in raw.split('\r\n'):
-    if line.lower().startswith('date:'):
-        date_dt = parsedate_to_datetime(line[5:].strip())
-        # Now compare with cutoff
-```
-
-**NEVER use** `datetime.strptime()` with a fixed format — email date formats vary.
-
-### Step 9: Always verify
-
-After any operation, re-search the sender and confirm 0 remaining in INBOX:
-
-```python
-s, d = mail.uid('SEARCH', None, 'FROM', 'sender@example.com')
-remaining = len(d[0].split()) if s == 'OK' and d[0] else 0
-print(f'Reste INBOX: {remaining}')
-```
-
-### Creating IMAP folders
-
-```python
-mail.create('"Folder/Subfolder"')
-# ALWAYS quote the full folder path with double quotes inside single quotes
-```
-
-### Folder naming convention
-
-```
-IT/OVH
-IT/Cloud
-IT/SAP
-IT/GitHub
-```
-
----
+> **Note:** Gmail labels use internal IDs (like `Label_123`). To find a label ID from its name:
+> ```python
+> labels = service.users().labels().list(userId='me').execute()
+> label_id = [l['id'] for l in labels['labels'] if l['name'] == 'Finance/Invoices'][0]
+> ```
 
 ### Protecting Senders
 
@@ -507,7 +361,7 @@ Find the account in `accounts.list.<email>.protected_senders`:
         },
         "routing": {
           "rules": [
-            {"sender": "invoices@provider.com", "folder": "Finance/Invoices"}
+            {"sender": "invoices@provider.com", "label": "Finance/Invoices"}
           ]
         }
       }
@@ -516,111 +370,182 @@ Find the account in `accounts.list.<email>.protected_senders`:
 }
 ```
 
-Also add routing rules for predictable senders (e.g., invoices → Finance, cloud provider → IT) in the `accounts.list.<email>.routing.rules` section.
-
 ---
 
-### Keychain Helper Function
+## 🧹 Bulk Cleanup — Exact Step-by-Step Process
+
+Follow these exact steps in order when the user asks to clean up emails from a sender.
+
+### Step 1: Find the sender's actual email address
+
+Search the fetched JSON for sender addresses, or use the Gmail API directly:
 
 ```python
-import subprocess
-def get_password(email, service="email-manager"):
-    result = subprocess.run(
-        ["security", "find-generic-password", "-a", email, "-s", service, "-w"],
-        capture_output=True, text=True, check=True
-    )
-    return result.stdout.strip()
+service = get_service()
+response = service.users().messages().list(
+    userId='me',
+    q='from:domain.com',
+    maxResults=500
+).execute()
+message_ids = [m['id'] for m in response.get('messages', [])]
 ```
 
-### Complete Python Template (Delete All)
+### Step 2: Show sample subjects to the user
+
+Always show the last 10-15 subjects so the user can decide what to do.
 
 ```python
-import imaplib, json, subprocess
-with open('/path/to/config.json') as f:
-    cfg = json.load(f)
-
-# Get password from Keychain (or from config.imap for legacy)
-email = "sender@example.com"
-password = subprocess.run(
-    ["security", "find-generic-password", "-a", email, "-s", "email-manager", "-w"],
-    capture_output=True, text=True
-).stdout.strip()
-
-# Or use single-account legacy config with password in config (fallback)
-imap_cfg = cfg.get("imap", {})
-
-mail = imaplib.IMAP4_SSL(imap_cfg["server"], imap_cfg.get("port", 993))
-mail.login(imap_cfg["username"], password or imap_cfg.get("password", ""))
-mail.select('INBOX')
-
-s, d = mail.uid('SEARCH', None, 'FROM', 'sender@example.com')
-uids = d[0].split()
-total = len(uids)
-print(f'Deleting {total}...')
-mail.uid('STORE', ','.join(u.decode() for u in uids), '+FLAGS', r'(\Deleted)')
-mail.expunge()
-print(f'Done. {total} deleted')
-mail.logout()
+for msg_id in message_ids[-15:]:
+    msg = service.users().messages().get(
+        userId='me', id=msg_id, format='metadata',
+        metadataHeaders=['Subject', 'Date']
+    ).execute()
+    headers = msg['payload']['headers']
+    subject = next(h['value'] for h in headers if h['name'] == 'Subject')
+    date = next(h['value'] for h in headers if h['name'] == 'Date')
+    print(f"{date} | {subject}")
 ```
 
-### Complete Python Template (Move & Delete)
+### Step 3: Check `protected_senders` in config.json
+
+Before ANY delete/unsubscribe, read `scripts/config.json` and check if the sender is in `protected_senders.list`. If yes:
+- ❌ Never delete
+- ❌ Never unsubscribe
+- ✅ Only move folders if asked
+
+### Step 4: Choose the action pattern
+
+| User says | Action |
+|-----------|--------|
+| "Supprimer" | Bulk trash via Gmail API (`modify` with `TRASH` label or `trash()`) |
+| "Désabonner + supprimer" | Find unsubscribe link → curl → bulk trash |
+| "Supprimer les vieux de +2 mois" | Filter by date, bulk trash only those |
+| "Déplacer vers dossier" | `modify()` → add label + remove INBOX |
+
+### Step 5: Unsubscribe (if needed)
+
+Use the `find_unsub.py` script:
+
+```bash
+python3 ~/.agents/skills/email-manager/tmp/find_unsub.py sender@example.com
+```
+
+The script reads one email, extracts the `List-Unsubscribe` header, and prints URLs.
+
+If you find a URL, use `curl -s -L <url> -o /dev/null -w "HTTP %{http_code}\n"`.
+
+**Edge cases:**
+- If the link has `id=undefined` → try the link from an OLDER email which may have a valid ID
+- If only a `mailto:` link → unsubscribe not possible via HTTP, just delete
+- If no unsubscribe header at all → just delete
+
+### Step 6: Bulk delete via Gmail API
+
+**Gmail API has rate limits (250 quota units/user/sec). Each `modify` costs 5 units.**
+Batch operations are essential for bulk deletes.
 
 ```python
-# Same setup: get password from Keychain, login
-s, d = mail.uid('SEARCH', None, 'FROM', 'sender@example.com')
-uids = d[0].split()
-chunk = 50
-dest = '"Gestion Interne/Finance-Compta"'
-for i in range(0, len(uids), chunk):
-    c = uids[i:i+chunk]
-    uid_str = ','.join(u.decode() for u in c)
-    mail.uid('COPY', uid_str, dest)
-    mail.uid('STORE', uid_str, '+FLAGS', r'(\Deleted)')
-mail.expunge()
+from googleapiclient.http import BatchHttpRequest
+
+def trash_callback(request_id, response, exception):
+    if exception:
+        print(f"Error trashing {request_id}: {exception}")
+
+batch = service.new_batch_http_request(callback=trash_callback)
+for msg_id in message_ids:
+    batch.add(service.users().messages().trash(userId='me', id=msg_id))
+batch.execute()
+print(f"Trashed {len(message_ids)} messages")
+```
+
+For simpler cases, use the `modify` method to add the `TRASH` label:
+
+```python
+for msg_id in message_ids:
+    service.users().messages().modify(
+        userId='me', id=msg_id,
+        body={'addLabelIds': ['TRASH'], 'removeLabelIds': ['INBOX']}
+    ).execute()
+```
+
+### Step 7: Bulk move to label (Gmail API)
+
+```python
+# First, find the target label ID
+labels = service.users().labels().list(userId='me').execute()
+target_label_id = next(
+    l['id'] for l in labels['labels']
+    if l['name'] == 'Finance/Invoices'
+)
+
+for msg_id in message_ids:
+    service.users().messages().modify(
+        userId='me', id=msg_id,
+        body={
+            'addLabelIds': [target_label_id],
+            'removeLabelIds': ['INBOX']
+        }
+    ).execute()
+```
+
+### Step 8: Delete by age (older than N months)
+
+Use Gmail's search query to filter by date:
+
+```python
+cutoff = (datetime.now() - timedelta(days=60)).strftime('%Y/%m/%d')
+response = service.users().messages().list(
+    userId='me',
+    q=f'from:domain.com before:{cutoff}',
+    maxResults=500
+).execute()
+```
+
+### Step 9: Always verify
+
+After any operation, re-search and confirm 0 remaining in INBOX:
+
+```python
+response = service.users().messages().list(
+    userId='me',
+    q='from:sender@example.com in:inbox'
+).execute()
+remaining = len(response.get('messages', []))
+print(f'Reste INBOX: {remaining}')
 ```
 
 ---
 
 ### Pitfalls to Avoid
 
-- ❌ **Don't loop UID.COPY one-by-one** — takes 30+ seconds for >100 emails
+- ❌ **Don't loop API calls one-by-one for hundreds of messages** — use batch requests
 - ❌ **Don't use `datetime.strptime` for email dates** — always use `parsedate_to_datetime`
-- ❌ **Don't forget to quote folder names** — use `'"Folder/Name"'` for CREATE, COPY, SELECT
-- ❌ **Don't use `mail.select('[Gmail]/All Mail')`** — it fails. Use raw command: `mail._simple_command('SELECT', '"[Gmail]/All Mail"')` then set `mail.state = 'SELECTED'`
 - ❌ **Don't unsubscribe if sender is in `protected_senders`**
-- ❌ **Don't use `SUBJECT` search with special characters (é, à, etc.)** — IMAP can't encode them. Use `TEXT` search instead or scan UIDs
-- ❌ **Don't store passwords in config files** — Always use macOS Keychain via `security find-generic-password`
-```
+- ❌ **Don't use IMAP-specific folder names with Gmail API** — Gmail uses label IDs, not folder paths
+- ❌ **Don't store OAuth tokens in config files** — `token.gmail.json` is auto-managed
 
 ---
 
 ## 🔐 Security Notes
 
-- **Passwords are in macOS Keychain** — Never stored in config files. Use `security add-generic-password -a "email" -s "email-manager" -w "password"` to add/update.
-- **config.json has no passwords** — It only references the email address; the script retrieves the password from Keychain at runtime.
-- **App Passwords**: For Gmail, prefer an App Password (https://myaccount.google.com/apppasswords). If disabled, your regular password works if IMAP is enabled.
-- **IMAP access**: Some providers require "Less secure app access" or specific IMAP settings. Check your provider's documentation.
+- **OAuth2** — No passwords stored. Authentication is via Google's OAuth2 flow.
+- **credentials.gmail.json** — Your OAuth client credentials (download from Google Cloud Console). Do not commit.
+- **token.gmail.json** — Auto-generated access + refresh token. Never share or commit. Auto-refreshes.
+- **Revoke access** at https://myaccount.google.com/permissions anytime.
 - **Invoice storage**: Ensure the invoice directory has appropriate backups.
-
-## 📞 Supported Providers
-
-| Provider | IMAP Server | Port | Notes |
-|----------|------------|------|-------|
-| Gmail / Google Workspace | `imap.gmail.com` | 993 | Requires App Password with 2FA |
-| Outlook.com / Hotmail | `outlook.office365.com` | 993 | Use regular password or app password |
-| Office 365 / Exchange | `outlook.office365.com` | 993 | Org admin may restrict IMAP |
-| Yahoo Mail | `imap.mail.yahoo.com` | 993 | App password recommended |
-| iCloud | `imap.mail.me.com` | 993 | App-specific password required |
-| Custom (any IMAP) | your server | 143 or 993 | For self-hosted or corporate mail |
+- **Scope**: `gmail.modify` — required for reading, deleting, and moving emails.
 
 ## 📂 Skill Files Reference
 
 ```
 email-manager/
 ├── SKILL.md                    ← This file — skill instructions
+├── credentials.gmail.json      ← OAuth2 client ID/secret (from Google Cloud Console, git-ignored)
+├── token.gmail.json            ← OAuth2 token (auto-generated, git-ignored)
 ├── scripts/
 │   ├── config.json             ← Account config (no passwords!)
-│   ├── fetch_emails.py         ← Multi-account IMAP fetcher → JSON
+│   ├── auth.py                 ← Gmail API OAuth2 authentication
+│   ├── fetch_emails.py         ← Gmail API email fetcher → JSON
 │   ├── extract_invoices.py     ← Invoice detection & metadata
 │   └── setup.sh                ← One-time interactive setup (legacy)
 ├── references/
@@ -628,18 +553,17 @@ email-manager/
 │   └── user_preferences.json   ← Learned categorization rules (auto-created)
 ```
 
-## 🔑 Keychain Commands Reference
+## 🔑 Gmail API vs IMAP — Key Differences
 
-```bash
-# Add / update a password
-security add-generic-password -a "user@example.com" -s "email-manager" -w "password" -U
+| Action | Old (IMAP) | New (Gmail API) |
+|--------|-----------|----------------|
+| Auth | App Password in Keychain | OAuth2 (browser consent) |
+| Search query | `FROM x SINCE y` | `from:x after:y` |
+| Folders | IMAP folders | Gmail labels |
+| Delete | `STORE +FLAGS (\Deleted)` → expunge | `messages().trash()` or `modify()` with `TRASH` label |
+| Move | `COPY` → `STORE +FLAGS (\Deleted)` → expunge | `messages().modify()` → add/remove labelIds |
+| Attachments | Inline in IMAP fetch | `messages().get()` with `format=full` |
+| Rate limits | ~1500 connections/day | 250 quota units/user/sec (generous) |
+| Auth storage | macOS Keychain | `token.gmail.json` (OAuth2) |
 
-# Retrieve a password (used by scripts)
-security find-generic-password -a "user@example.com" -s "email-manager" -w
-
-# Delete a password
-security delete-generic-password -a "user@example.com" -s "email-manager"
-
-# List all stored email passwords
-security dump-keychain | grep -A1 "email-manager"
-```
+> **Note:** The `_gmail_labels` and `thread_id` fields are added to each email in the JSON output for use in Gmail API operations (delete, move, etc.).
