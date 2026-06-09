@@ -714,6 +714,9 @@ def main():
             
             try:
                 depth = args.depth or account_config.get("depth", 50)
+                # Forks are upstream codebases — shallow clone to depth=1 is enough
+                if is_fork:
+                    depth = 1
                 clone_path = shallow_clone(repo_full, work_dir, depth=depth)
                 
                 if not clone_path:
