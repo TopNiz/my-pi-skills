@@ -3,7 +3,9 @@
 **/config.json
 **/signature.json
 **/credentials.json
+**/credentials.gmail.json
 **/token.json
+**/token.gmail.json
 **/user_preferences.json
 **/__pycache__/
 **/.playwright-cli/
