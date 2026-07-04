@@ -13,6 +13,7 @@ Check the status, costs, and usage of all your AI accounts from one place.
 | **🟢 DeepSeek** | Account balance, credited vs topped-up funds |
 | **🟠 Ollama Cloud** | API key validity, available cloud models |
 | **🐙 GitHub Copilot** | Plan type, features enabled, available models count |
+| **🟣 Scaleway** | Total cost by category, AI/Gen APIs highlight, current period consumption |
 
 ---
 
@@ -26,7 +27,8 @@ ai-usage/
     ├── openai.py                     # OpenAI costs + usage
     ├── deepseek.py                   # DeepSeek balance
     ├── ollama.py                     # Ollama Cloud model list
-    └── github_copilot.py             # GitHub Copilot plan + features
+    ├── github_copilot.py             # GitHub Copilot plan + features
+    └── scaleway.py                   # Scaleway cloud costs by category
 ```
 
 Each provider script is **standalone** - you can run them individually:
@@ -137,6 +139,7 @@ Output:
    DeepSeek:         https://platform.deepseek.com
    Ollama:           https://ollama.com/settings/billing
    GitHub Copilot:   https://github.com/settings/copilot
+   Scaleway:         https://console.scaleway.com/billing/invoices
 ```
 
 ### Single provider
@@ -162,6 +165,9 @@ Output:
 ./providers/openai.py                # Pretty
 ./providers/openai.py --json         # JSON only
 ./providers/openai.py --verbose      # Verbose
+./providers/scaleway.py              # Scaleway usage
+./providers/scaleway.py --json       # JSON only
+./providers/scaleway.py --verbose    # Verbose
 ```
 
 ---
@@ -222,6 +228,23 @@ Key: `~/.local/share/opencode/auth.json` → `ollama-cloud.key`
 1. `GITHUB_COPILOT_KEY` env var / `~/.pi/agent/.env`
 2. `~/.pi/agent/auth.json` → `github-copilot.refresh` *(populated automatically by pi when using Copilot)*
 3. `gh` CLI - `gh auth token` *(fallback; the regular `gho_...` token also works for this endpoint)*
+
+### Scaleway (`providers/scaleway.py`)
+
+| Endpoint | Data |
+|---|---|
+| Scaleway CLI `scw billing consumption list` | Monthly consumption by product, aggregated by category |
+
+**How it works:**
+- Uses the Scaleway CLI (`scw`) to fetch consumption data via the Billing API v2beta1
+- The Go SDK handles HMAC-SHA256 request signing internally, so we can't use plain `curl`
+- Consumptions are grouped by category (BareMetal, Object Storage, Compute, Network, etc.)
+- AI/Generative API costs are highlighted separately (LLM, gen, chat, embedding, model keywords)
+- Currency: EUR
+
+**Credentials:**
+- Reads from Scaleway SDK config file: `~/.config/scw/config.yaml`
+- Environment variables: `SCW_ORGANIZATION_ID`, `SCW_ACCESS_KEY`, `SCW_SECRET_KEY`
 
 ---
 

@@ -23,6 +23,7 @@ PROVIDER_SCRIPTS=(
   "deepseek:deepseek.py"
   "ollama:ollama.py"
   "github-copilot:github_copilot.py"
+  "scaleway:scaleway.py"
 )
 
 OUTPUT_MODE="pretty"  # pretty, json, verbose
@@ -31,7 +32,7 @@ FILTER=""             # empty = all providers
 # --- Option parsing ---
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    openai|deepseek|ollama|github-copilot) FILTER="$1"; shift ;;
+    openai|deepseek|ollama|github-copilot|scaleway) FILTER="$1"; shift ;;
     --json)    OUTPUT_MODE="json"; shift ;;
     --verbose) OUTPUT_MODE="verbose"; shift ;;
     -h|--help)
@@ -44,6 +45,7 @@ while [[ $# -gt 0 ]]; do
       echo "  deepseek         DeepSeek API (balance, credits)"
       echo "  ollama           Ollama Cloud (key validity, model count)"
       echo "  github-copilot   GitHub Copilot (plan, features, models)"
+      echo "  scaleway         Scaleway (cloud costs by category, AI APIs)"
       echo ""
       echo "Options:"
       echo "  --json        Output raw JSON responses"
@@ -90,6 +92,7 @@ if [ "$OUTPUT_MODE" != "json" ]; then
       deepseek)         echo "🟢 DeepSeek" ;;
       ollama)           echo "🟠 Ollama Cloud" ;;
       github-copilot)   echo "🐙 GitHub Copilot" ;;
+      scaleway)         echo "🟣 Scaleway" ;;
     esac
 
     if [ -x "$script" ]; then
@@ -115,6 +118,7 @@ if [ "$OUTPUT_MODE" != "json" ]; then
   echo "   DeepSeek:         https://platform.deepseek.com"
   echo "   Ollama:           https://ollama.com/settings/billing"
   echo "   GitHub Copilot:   https://github.com/settings/copilot"
+  echo "   Scaleway:         https://console.scaleway.com/billing/invoices"
   echo ""
 
 # ============================================================
@@ -137,7 +141,7 @@ import json, os
 
 tmpdir = '$tmpdir'
 result = {}
-providers = ['openai', 'deepseek', 'ollama', 'github-copilot']
+providers = ['openai', 'deepseek', 'ollama', 'github-copilot', 'scaleway']
 
 for p in providers:
     path = os.path.join(tmpdir, f'{p}.json')

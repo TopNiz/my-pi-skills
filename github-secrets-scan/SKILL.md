@@ -98,9 +98,133 @@ python3 scripts/scan.py --depth 100
 
 # Skip specific repos
 python3 scripts/scan.py --skip TopNiz/rabbitmq-server TopNiz/arduino-esp32
+
+# Scan + AI classification (filters test/example findings)
+python3 scripts/scan.py --ai-classify
+
+# Scan + interactive mitigation (mark findings as normal/resolved)
+python3 scripts/scan.py --mitigate
+
+# Scan + AI + auto-store into mitigation DB
+python3 scripts/scan.py --ai-classify
+
+# Manage the mitigation database (list, remove, stats, vacuum)
+python3 scripts/scan.py --manage-mitigations
+
+# Use a custom mitigation DB path
+python3 scripts/scan.py --mitigation-db /path/to/custom.db
+
+# Reset all repo scan preferences — rediscover all repos
+python3 scripts/scan.py --repos-reset
 ```
 
-### 3. Review results
+### 3. AI Classification (optional)
+
+After scanning, run AI classification on the findings to automatically identify
+normal/test data vs. real secrets:
+
+```bash
+# One-step: scan + classify
+python3 scripts/scan.py --ai-classify
+
+# Or run classification on a previous scan result
+python3 scripts/ai_classify.py reports/github-secrets-scan_2026-06-10_06-00-02.json
+```
+
+The AI classifier uses pi with **OpenAI Codex (GPT-5.4 mini)** to analyze each
+finding. It adds an `ai_verdict` field (`"normal"` or `"review"`) and a reason.
+
+Results are saved to a `_classified.json` file alongside the original report.
+
+### 4. Repo Scan Preferences
+
+The mitigation database tracks which repos to scan. The workflow is:
+
+1. **First encounter:** New repos are **automatically scanned** and stored in
+   the DB with `to_be_scanned = 1`. No prompting.
+2. **Report flags them:** The scan report highlights newly discovered repos
+   in a dedicated `🆕 NEWLY DISCOVERED REPOS` section, showing which ones had
+   findings and which were clean.
+3. **You decide later:** After reviewing the report, tell me to flag specific
+   repos as skipped. I'll update the DB.
+
+This works for automation (cron) and manual runs alike — no interactive
+prompts needed. You review the output and decide what to skip.
+
+```bash
+# Reset all preferences — will re-discover all repos on next scan
+python3 scripts/scan.py --repos-reset
+
+# List all tracked repos and their flags
+python3 scripts/mitigation_db.py repos
+
+# Show only skipped repos
+python3 scripts/mitigation_db.py repos --skipped
+
+# Show only repos to be scanned
+python3 scripts/mitigation_db.py repos --scanned
+```
+
+### 5. AI auto-stores normal findings into Mitigation Database
+
+When using `--ai-classify`, the AI classifier **automatically stores** every
+finding it classifies as "normal" into the mitigation database. Additionally,
+before calling the AI, it checks the database first — if a finding was already
+reviewed, it skips the AI call entirely. This saves tokens on repeated scans.
+
+```bash
+# First scan: AI classifies everything, stores "normal" findings
+python3 scripts/scan.py --ai-classify
+
+# Second scan: DB already has those — AI is only called on *new* findings
+python3 scripts/scan.py --ai-classify
+
+# DB-only mode: no AI at all, just use the database (fastest)
+python3 scripts/ai_classify.py --db-only reports/scan_results.json
+```
+
+### 6. Interactive Mitigation Review (recommended)
+
+After a scan, use `--mitigate` to review each finding one-by-one and
+permanently mark it as **normal** (false positive / test data) or **resolved**
+(remediated). Once marked, the finding is **silently skipped** on all future
+scans — no more noise.
+
+```bash
+# Scan + interactive mitigation
+python3 scripts/scan.py --mitigate
+
+# Scan, then review each finding with [n]ormal / [r]esolved / [s]kip / [q]uit
+```
+
+Each entry supports an optional comment for your future reference.
+
+### 7. Manage the Mitigation Database
+
+```bash
+# List all entries
+python3 scripts/mitigation_db.py list
+
+# Filter by verdict
+python3 scripts/mitigation_db.py list --verdict normal
+
+# Filter by repo
+python3 scripts/mitigation_db.py list --repo TopNiz/finperso
+
+# Remove an entry by its fingerprint
+python3 scripts/mitigation_db.py remove <fingerprint>
+
+# Show statistics
+python3 scripts/mitigation_db.py stats
+
+# Shortcut: via scan.py
+python3 scripts/scan.py --manage-mitigations
+```
+
+The database is a **SQLite** file at `scripts/mitigation.db`. It is
+gitignored — your review decisions stay local.
+
+### 8. Review results
 
 The scanner categorizes findings by **severity**:
 
@@ -139,8 +263,8 @@ The scanner categorizes findings by **severity**:
     → User email: nizar.ayed@tourisfair.de (in 8 commits)
   
   📁 TopNiz/nono_rent_backend (commit history)
-    → Other email: sonia_tfifha@yahoo.fr (test data)
-    → Other email: jean.dupont@email.com (test data)
+    → Other email: user@example.com (test data)
+    → Other email: user2@example.com (test data)
 
 🔵 MEDIUM (3 findings)
   ───────────────────────────────────────────
@@ -312,16 +436,18 @@ To add a new pattern, edit `scripts/scan.py` (the `BUILTIN_PATTERNS` list) and a
 ## 🧠 How It Works (Technical)
 
 1. **Repository Discovery**: Uses `gh repo list` with JSON output, filters `visibility == "PUBLIC"`
-2. **Cloning**: Git shallow clone (`--depth N`) to minimize bandwidth — only the last N commits
-3. **File Scan**: Walks all tracked files, reads text content, applies regex patterns
-4. **Commit History Scan**: Runs `git log --all -p` and applies the same patterns to the unified diff output
-5. **False Positive Filtering**:
+2. **Repo Scan Preferences**: Each repo is checked against the mitigation DB. New repos prompt for your preference; skipped repos are excluded without cloning.
+3. **Cloning**: Git shallow clone (`--depth N`) to minimize bandwidth — only the last N commits
+4. **File Scan**: Walks all tracked files, reads text content, applies regex patterns
+5. **Commit History Scan**: Runs `git log --all -p` and applies the same patterns to the unified diff output
+6. **Mitigation DB Filter**: Every finding is checked against the DB. Already-reviewed findings are silently removed.
+7. **False Positive Filtering**:
    - Skips binary files by extension
    - Skips known safe directories (node_modules, vendor, dist)
    - Ignores example.com, test@, placeholder values
    - Flags npm package.json maintainer emails as INFO only
    - Detects fork repos and flags upstream code separately
-6. **Reporting**: Grouped by severity, with deduplication and sample output
+8. **Reporting**: Grouped by severity, with deduplication and sample output
 
 ---
 
@@ -332,11 +458,26 @@ github-secrets-scan/
 ├── SKILL.md                      ← This file
 ├── scripts/
 │   ├── config.json               ← Account & scan configuration
-│   └── scan.py                   ← Main scanner script
+│   ├── scan.py                   ← Main scanner script
+│   ├── ai_classify.py            ← AI classification (OpenAI Codex)
+│   ├── mitigation_db.py          ← Mitigation database manager
+│   ├── mitigation.db             ← SQLite DB (gitignored, auto-created)
+│   └── .gitignore                ← Ignores *.db, reports/
 ├── references/
 │   ├── patterns.md               ← All regex patterns with descriptions
 │   └── remediation.md            ← Step-by-step cleanup guides
 ```
+
+The mitigation database (`mitigation.db`) is SQLite and auto-created on first
+use. It stores your review decisions and repo scan preferences locally.
+It contains two tables:
+
+| Table | Purpose |
+|-------|---------|
+| `mitigations` | Findings marked as normal (false positive) or resolved (remediated) — silently skipped on future scans |
+| `repos` | Repo scan preferences — `to_be_scanned` flag set interactively per repo, persists across scans |
+
+The database is excluded from git via `.gitignore`.
 
 ---
 
@@ -364,4 +505,16 @@ cd ~/.agents/skills/github-secrets-scan && python3 scripts/scan.py --account dot
 
 # Exclude forks, no commit history (fastest)
 cd ~/.agents/skills/github-secrets-scan && python3 scripts/scan.py --no-forks --no-commits
+
+# Full scan + AI classification (filters test data automatically)
+cd ~/.agents/skills/github-secrets-scan && python3 scripts/scan.py --ai-classify
+
+# Scan + interactive review to mark findings as normal/resolved
+cd ~/.agents/skills/github-secrets-scan && python3 scripts/scan.py --mitigate
+
+# Second scan: AI only classifies new findings, DB handles known ones
+cd ~/.agents/skills/github-secrets-scan && python3 scripts/scan.py --ai-classify
+
+# List all mitigated findings
+cd ~/.agents/skills/github-secrets-scan && python3 scripts/mitigation_db.py stats
 ```

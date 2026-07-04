@@ -211,6 +211,111 @@ $OCC group:removeuser <group> <uid>
 
 For bulk operations, script defensively: quote user IDs, dry-run where possible, and log changes.
 
+## AI image generation via OCS TaskProcessing
+
+Nextcloud 30+ uses the TaskProcessing API for text-to-image generation. The older OCS Text-To-Image API exists but is deprecated. There is no built-in `occ` command to schedule a text-to-image task; use the OCS API remotely, or use PHP with `OCP\TaskProcessing\IManager` for server-side tests.
+
+For the Codimeo AIO deployment, the `occ` style is:
+
+```bash
+ssh -o RemoteCommand=none -o RequestTTY=no codimeo.com \
+  "docker exec -u www-data nextcloud-aio-nextcloud php occ status"
+```
+
+### macOS keychain app password
+
+For remote curl tests, store the Nextcloud app password in macOS Keychain under:
+
+- Service: `nextcloud.codimeo.com image-generation app-password`
+- Account: `nizar_ayed`
+
+Retrieve it without printing it:
+
+```bash
+NC_USER='nizar_ayed'
+NC_APP_PASSWORD=$(security find-generic-password \
+  -s 'nextcloud.codimeo.com image-generation app-password' \
+  -a "$NC_USER" \
+  -w)
+```
+
+Never echo or log `NC_APP_PASSWORD`.
+
+To create/replace that app password when explicitly requested:
+
+```bash
+SERVICE='nextcloud.codimeo.com image-generation app-password'
+ACCOUNT='nizar_ayed'
+TOKEN=$(ssh -o RemoteCommand=none -o RequestTTY=no codimeo.com \
+  "docker exec -u www-data nextcloud-aio-nextcloud php occ user:add-app-password --no-interaction --name='pi image generation curl' nizar_ayed" \
+  2>/dev/null | awk 'prev{print; exit} /^app password:/{prev=1}')
+security add-generic-password -U -s "$SERVICE" -a "$ACCOUNT" -w "$TOKEN" >/dev/null
+unset TOKEN
+```
+
+### Schedule an image-generation task
+
+```bash
+NC_USER='nizar_ayed'
+NC_APP_PASSWORD=$(security find-generic-password \
+  -s 'nextcloud.codimeo.com image-generation app-password' \
+  -a "$NC_USER" \
+  -w)
+
+curl -sS \
+  -u "$NC_USER:$NC_APP_PASSWORD" \
+  -H 'OCS-APIRequest: true' \
+  -H 'Content-Type: application/json' \
+  'https://nextcloud.codimeo.com/ocs/v2.php/taskprocessing/schedule?format=json' \
+  -d '{
+    "type": "core:text2image",
+    "appId": "pi-image-generation",
+    "customId": "pi-test-image",
+    "input": {
+      "input": "A simple blue cloud icon on a white background",
+      "numberOfImages": 1
+    }
+  }'
+```
+
+Poll the task:
+
+```bash
+curl -sS \
+  -u "$NC_USER:$NC_APP_PASSWORD" \
+  -H 'OCS-APIRequest: true' \
+  "https://nextcloud.codimeo.com/ocs/v2.php/taskprocessing/task/$TASK_ID?format=json"
+```
+
+If a task remains `STATUS_SCHEDULED`, process one queued text-to-image task with the worker:
+
+```bash
+ssh -o RemoteCommand=none -o RequestTTY=no codimeo.com \
+  "docker exec -u www-data nextcloud-aio-nextcloud php occ taskprocessing:worker --once --taskTypes=core:text2image"
+```
+
+For successful `core:text2image`, the output contains file IDs in `output.images`. Fetch an image file without printing the secret:
+
+```bash
+curl -sS \
+  -u "$NC_USER:$NC_APP_PASSWORD" \
+  -H 'OCS-APIRequest: true' \
+  "https://nextcloud.codimeo.com/ocs/v2.php/taskprocessing/tasks/$TASK_ID/file/$FILE_ID" \
+  -o generated.png
+```
+
+For a non-writing fetch test, write to `/dev/null` and inspect headers/status only:
+
+```bash
+curl -sS \
+  -u "$NC_USER:$NC_APP_PASSWORD" \
+  -H 'OCS-APIRequest: true' \
+  -o /dev/null -w '%{http_code}\n' \
+  "https://nextcloud.codimeo.com/ocs/v2.php/taskprocessing/tasks/$TASK_ID/file/$FILE_ID"
+```
+
+Secret-handling rule: pass app passwords only via variables sourced from Keychain; never inline, echo, trace (`set -x`), or log them.
+
 ## Files, scans, and trash
 
 Rescan files after out-of-band filesystem changes:

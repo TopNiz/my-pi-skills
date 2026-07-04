@@ -103,7 +103,41 @@ playwright-cli --raw eval "() => document.body.innerText.slice(0, 5000)"
 
 **Check:** The page content loaded correctly.
 
-### Step 9 — Close the browser — mandatory final step
+### Step 9 — Save a PDF displayed in Chrome's PDF viewer (when needed)
+
+If a PDF opens in Chrome's built-in PDF viewer, **do not use `playwright-cli pdf`**. That prints/saves the viewer page, not the original PDF. Use the viewer's download button and capture Playwright's `download` event.
+
+1. Select the tab containing the displayed PDF:
+
+```bash
+playwright-cli tab-list
+playwright-cli tab-select <pdf-tab-index>
+```
+
+2. If needed, take a screenshot to locate the PDF viewer toolbar/download button:
+
+```bash
+playwright-cli screenshot --filename=.playwright-cli/pdf-viewer.png
+```
+
+3. Trigger the viewer download button and save the actual downloaded file:
+
+```bash
+playwright-cli --raw run-code "async page => { const out = 'path/to/article.pdf'; const downloadPromise = page.waitForEvent('download', { timeout: 20000 }); await page.mouse.click(1095, 28); const download = await downloadPromise; await download.saveAs(out); return {saved: out, suggested: download.suggestedFilename()}; }"
+```
+
+4. Verify the saved file is a real PDF:
+
+```bash
+file path/to/article.pdf && ls -lh path/to/article.pdf
+```
+
+**Notes:**
+- The click coordinates depend on the browser size. Use the screenshot to adjust them.
+- This is especially useful for ScienceDirect/EZproxy PDFs that render correctly in the browser but fail when fetched directly with `curl`.
+- Alternative approaches documented online include Playwright `page.waitForEvent('download')` + `download.saveAs(...)`; direct `fetch()`/request API may fail on proxied or signed PDF URLs.
+
+### Step 10 — Close the browser — mandatory final step
 
 Always close the browser after extracting the final results or finishing the requested browsing task:
 

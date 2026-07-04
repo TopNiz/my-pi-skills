@@ -12,6 +12,7 @@ This repository is intended to be cloned to:
 
 | Skill | Purpose | Main docs |
 |---|---|---|
+| `ideation` | Record, detail, and track your ideas — quick-log or deep-dive with notes. | [`ideation/SKILL.md`](ideation/SKILL.md) |
 | `ai-usage` | Check account usage, costs, balances, and access across OpenAI, DeepSeek, and Ollama Cloud. | [`ai-usage/SKILL.md`](ai-usage/SKILL.md) |
 | `email-manager` | Fetch IMAP email, categorize messages, detect urgency, prepare reviews, and extract invoices. | [`email-manager/SKILL.md`](email-manager/SKILL.md) |
 | `describe-image` | Describe images in detail using pi with a vision-capable model. | [`describe-image/SKILL.md`](describe-image/SKILL.md) |
@@ -31,6 +32,7 @@ This repository is intended to be cloned to:
 ├── README.md
 ├── deploy.sh
 ├── .gitignore
+├── ideation/
 ├── ai-usage/
 ├── email-manager/
 ├── describe-image/
@@ -41,6 +43,7 @@ This repository is intended to be cloned to:
 ├── preview-manager/
 ├── ssh-skills/
 ├── web-browser/
+├── write-html/
 └── web-search/
 ```
 

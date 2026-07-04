@@ -1,0 +1,10 @@
+# Mitigation database — local review decisions only
+mitigation.db
+mitigation.db-wal
+mitigation.db-shm
+
+# Scan reports (contain sensitive data)
+reports/
+
+__pycache__/
+*.pyc

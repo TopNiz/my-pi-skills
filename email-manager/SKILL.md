@@ -181,9 +181,25 @@ For each email, determine:
 
 After presenting the categorized summary, offer to:
 - **Read full email** — User says "read the one about X" → show full body_text
-- **Reply draft** — User says "draft a reply to X" → prepare a response
+- **Reply draft** — User says "draft a reply to X" → prepare a response (see [Reply drafting](#-reply-drafting) below)
 - **Flag for action** — User says "flag this" → mark email in your task list
 - **Extract invoices** — See invoice workflow below
+
+---
+
+### ✍️ Reply Drafting
+
+When the user asks to draft a reply, use the **[reply-style](../reply-style/SKILL.md)** skill to generate the email content:
+
+1. **Load the reply-style skill** — Read `../reply-style/SKILL.md` and `../reply-style/references/STYLE-GUIDE.md`
+2. **Look up the sender** — Check if the sender exists in `../reply-style/contacts/index.json`
+3. **Read contact history** — If found, read their messages from `../reply-style/contacts/messages/<email>.json` to match your authoring style
+4. **Apply presentation templates** — For structured data (invoices, readings, amounts), use `../reply-style/references/EMAIL-TEMPLATES.md` for the HTML layout (tables, headings, colors)
+5. **Use the correct signature** — French or English HTML signature from `STYLE-GUIDE.md` section 11, populated from `../reply-style/config/signature.json`
+6. **Save as draft in Gmail** — Use the Gmail API `drafts.create()` with `multipart/alternative` (HTML + plain text)
+7. **Wait for confirmation** — Never send without explicit user approval
+
+> The reply-style skill handles **authoring style** (tone, greeting, language) and **presentation style** (HTML tables, layout, signature). The email-manager skill handles Gmail API transport (fetching, drafting, sending).
 
 ---
 

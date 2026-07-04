@@ -6,7 +6,7 @@ allowed-tools: read write edit bash
 
 # 🗣️ Reply Style Skill
 
-Drafts replies to messages by learning **your personal writing style per contact**. Instead of generic AI-sounding responses, get replies that sound like *you*.
+Drafts replies to messages by learning **your personal writing style per contact** (tone, language, greeting, sign-off) and your **preferred presentation style** (HTML formatting, tables, structured layouts). Instead of generic AI-sounding responses, get replies that sound like *you* and look like *you*.
 
 ---
 
@@ -254,6 +254,49 @@ Twitter : {{TWITTER}}
 
 ---
 
+## 📐 Presentation Style vs Authoring Style
+
+This skill covers **two distinct dimensions** of your communication:
+
+| Dimension | What it captures | Defined in |
+|-----------|-----------------|------------|
+| **Authoring style** 🗣️ | Tone, greeting, sign-off, language (fr/en), formality, sentence structure, emoji use | `STYLE-GUIDE.md` + per-contact message history |
+| **Presentation style** 📊 | HTML formatting, tables, structured layouts, colors, visual hierarchy | `EMAIL-TEMPLATES.md` |
+
+### Authoring Style (original purpose)
+
+Learned from your past sent messages per contact — how *you* write, not how an AI would write. The agent analyzes your greeting style, sentence length, punctuation, emoji usage, sign-off, and formality register, then mirrors it in replies.
+
+### Presentation Style (added)
+
+For structured emails containing data tables (invoices, readings, comparisons, reports), use the content templates defined in [`references/EMAIL-TEMPLATES.md`](references/EMAIL-TEMPLATES.md). These enforce a consistent visual identity across your structured emails.
+
+These templates provide:
+- A **base stylesheet** with consistent colors (`#2563eb` headers, `#dc2626` totals, alternating row stripes)
+- **2-column table templates** for key-value data
+- **Multi-section layouts** for complex emails with multiple data groups
+- A **full email layout** combining content tables + the standard signature from this skill
+
+### When to apply each
+
+| Scenario | Authoring style | Presentation style |
+|----------|----------------|-------------------|
+| Casual message ("See you tomorrow") | ✅ Match your tone | ❌ No template needed |
+| Invoice / bill breakdown | ✅ Match your tone | ✅ Tables make amounts clear |
+| Meter/reading comparison | ✅ Match your tone | ✅ Structured data |
+| Forwarded content | ✅ Match your tone | ❌ Preserve original |
+
+### How to apply presentation templates
+
+1. **Read** `references/EMAIL-TEMPLATES.md`
+2. **Include the `<style>` block** in the `<head>` of your HTML
+3. **Wrap content** in `<div class="container">`
+4. **Use `<h2>` + `<table>`** for each data section
+5. **Append the signature** from `STYLE-GUIDE.md` section 11 (French or English)
+6. **Always send multipart/alternative** (HTML + plain text fallback)
+
+---
+
 ## 📖 Learning Workflow: Add New Style Examples
 
 You can teach the skill your style for specific contacts or general preferences.
@@ -358,7 +401,8 @@ reply-style/
 │       ├── sarah_company_com.json ← Messages sent to sarah@company.com
 │       └── ...
 └── references/
-    └── STYLE-GUIDE.md             ← Reference for style analysis criteria
+    ├── STYLE-GUIDE.md             ← Reference for style analysis criteria
+    └── EMAIL-TEMPLATES.md          ← HTML content templates (tables, layouts)
 ```
 
 ### Contact file format (`contacts/messages/<email>.json`)

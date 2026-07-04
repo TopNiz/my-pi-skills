@@ -41,13 +41,34 @@ python3 "$SCAN_SCRIPT" "$CONFIG" \
     -o "$REPORT_JSON" \
     2>/tmp/github_secrets_scan_stderr.log || true
 
-# Extract stats
+# ── Step 1b: AI Classification ──
+echo ""
+echo "🤖 Running AI classification (OpenAI Codex)..."
+CLASSIFY_SCRIPT="$SKILL_DIR/scripts/ai_classify.py"
+REPORT_CLASSIFIED_JSON="${REPORT_JSON%.json}_classified.json"
+
+if python3 "$CLASSIFY_SCRIPT" "$REPORT_JSON" 2>/tmp/github_secrets_ai_stderr.log; then
+    echo "  ✅ AI classification terminée"
+    # Use classified JSON for reporting
+    REPORT_JSON="$REPORT_CLASSIFIED_JSON"
+else
+    echo "  ⚠️  AI classification a échoué, utilisation des résultats bruts"
+    cat /tmp/github_secrets_ai_stderr.log
+fi
+
+# Extract stats (from classified or raw JSON)
 TOTAL_FINDINGS=$(python3 -c "
 import json
 try:
     with open('$REPORT_JSON') as f:
         data = json.load(f)
-    print(data.get('total_findings', 0))
+    findings = data.get('findings', [])
+    # If AI classified, count only 'review' verdicts
+    if findings and 'ai_verdict' in findings[0]:
+        review = [f for f in findings if f.get('ai_verdict') == 'review']
+        print(len(review))
+    else:
+        print(len(findings))
 except:
     print('0')
 " 2>/dev/null || echo "0")
@@ -57,7 +78,11 @@ import json
 try:
     with open('$REPORT_JSON') as f:
         data = json.load(f)
-    cr = [f for f in data.get('findings', []) if f.get('severity') == 'critical']
+    findings = data.get('findings', [])
+    if findings and 'ai_verdict' in findings[0]:
+        cr = [f for f in findings if f.get('severity') == 'critical' and f.get('ai_verdict') == 'review']
+    else:
+        cr = [f for f in findings if f.get('severity') == 'critical']
     print(len(cr))
 except:
     print('0')
@@ -67,7 +92,11 @@ high=$(python3 -c "
 import json
 with open('$REPORT_JSON') as f:
     data = json.load(f)
-h = [f for f in data.get('findings', []) if f.get('severity') == 'high']
+findings = data.get('findings', [])
+if findings and 'ai_verdict' in findings[0]:
+    h = [f for f in findings if f.get('severity') == 'high' and f.get('ai_verdict') == 'review']
+else:
+    h = [f for f in findings if f.get('severity') == 'high']
 print(len(h))
 " 2>/dev/null || echo "0")
 
@@ -75,7 +104,11 @@ medium=$(python3 -c "
 import json
 with open('$REPORT_JSON') as f:
     data = json.load(f)
-m = [f for f in data.get('findings', []) if f.get('severity') == 'medium']
+findings = data.get('findings', [])
+if findings and 'ai_verdict' in findings[0]:
+    m = [f for f in findings if f.get('severity') == 'medium' and f.get('ai_verdict') == 'review']
+else:
+    m = [f for f in findings if f.get('severity') == 'medium']
 print(len(m))
 " 2>/dev/null || echo "0")
 
@@ -83,7 +116,11 @@ info=$(python3 -c "
 import json
 with open('$REPORT_JSON') as f:
     data = json.load(f)
-i = [f for f in data.get('findings', []) if f.get('severity') == 'info']
+findings = data.get('findings', [])
+if findings and 'ai_verdict' in findings[0]:
+    i = [f for f in findings if f.get('severity') == 'info' and f.get('ai_verdict') == 'review']
+else:
+    i = [f for f in findings if f.get('severity') == 'info']
 print(len(i))
 " 2>/dev/null || echo "0")
 
@@ -101,8 +138,20 @@ with open('$REPORT_JSON') as f:
 print(len(data.get('repos_scanned', [])) + len(data.get('clean_repos', [])))
 " 2>/dev/null || echo "0")
 
-echo "  ✅ Scan terminé : $scanned repos scannés, $TOTAL_FINDINGS trouvés"
-echo "     🔴 Critique: $critical  |  🟡 Élevé: $high  |  🔵 Moyen: $medium  |  ⚪ Info: $info"
+# Compute filtered stats (total raw findings)
+TOTAL_RAW=$(python3 -c "
+import json
+with open('${REPORT_JSON%_classified.json}.json') as f:
+    data = json.load(f)
+print(len(data.get('findings', [])))
+" 2>/dev/null || echo "$TOTAL_FINDINGS")
+
+FILTERED=$((TOTAL_RAW - TOTAL_FINDINGS))
+if [ "$FILTERED" -lt 0 ]; then FILTERED=0; fi
+
+echo "  ✅ Scan terminé : $scanned repos scannés"
+echo "     🔴 Critique: $critical (filtré) | 🟡 Élevé: $high | 🔵 Moyen: $medium | ⚪ Info: $info"
+echo "     📊 $TOTAL_RAW trouvailles brutes → $TOTAL_FINDINGS après classification IA"
 echo "     ✅ Clean repos: $clean"
 
 # ── Step 2: Generate Markdown report (for PDF) ──
@@ -172,6 +221,13 @@ findings = data.get('findings', [])
 if not findings:
     print('✅ **Aucune trouvaille détectée.**', file=open('$REPORT_MD', 'a'))
 else:
+    # If AI-classified, filter to only "review" findings
+    if findings and 'ai_verdict' in findings[0]:
+        total_raw = len(findings)
+        total_review = len([f for f in findings if f.get('ai_verdict') == 'review'])
+        findings = [f for f in findings if f.get('ai_verdict') == 'review']
+        print(f'🤖 **Classifié par IA (OpenAI Codex)** — {total_raw} trouvailles brutes → **{total_review} à vérifier**', file=open('$REPORT_MD', 'a'))
+        print(f'', file=open('$REPORT_MD', 'a'))
     labels = {'critical': '🔴 Critique', 'high': '🟡 Élevé', 'medium': '🔵 Moyen', 'info': '⚪ Info'}
     for sev in ['critical', 'high', 'medium', 'info']:
         items = [f for f in findings if f.get('severity') == sev]
@@ -302,7 +358,17 @@ with open("$REPORT_JSON") as f:
 
 findings = data.get("findings", [])
 clean_repos = data.get("clean_repos", [])
-total = data.get("total_findings", 0)
+total_raw = data.get("total_findings", len(findings))
+
+# If AI-classified, filter to only "review" findings
+has_ai_verdict = bool(findings and 'ai_verdict' in findings[0])
+if has_ai_verdict:
+    total_review = len([f for f in findings if f.get('ai_verdict') == 'review'])
+    total_filtered = total_raw - total_review
+    findings = [f for f in findings if f.get('ai_verdict') == 'review']
+else:
+    total_review = len(findings)
+    total_filtered = 0
 
 severity_cfg = {
     "critical": {"label": "Critique", "color": "#dc3545", "icon": "🔴"},
@@ -337,10 +403,20 @@ summary_rows += f"""<tr style="background:#f8f9fa;">
       <td style="padding:6px 12px;border:1px solid #dee2e6;text-align:center;"><strong>{len(clean_repos)}</strong></td>
     </tr>"""
 
+if has_ai_verdict:
+    summary_rows += f"""<tr style="background:#e8f5e9;">
+      <td style="padding:6px 12px;border:1px solid #dee2e6;text-align:center;font-size:18px;">🤖</td>
+      <td style="padding:6px 12px;border:1px solid #dee2e6;"><strong>Filtrés (normaux/test)</strong></td>
+      <td style="padding:6px 12px;border:1px solid #dee2e6;text-align:center;"><span style="display:inline-block;padding:2px 8px;border-radius:10px;color:#fff;font-weight:bold;background:#28a745;">{total_filtered}</span></td>
+    </tr>"""
+
 # -- Build findings detail --
 findings_html = ""
 if not findings:
-    findings_html = """<tr><td colspan="4" style="padding:20px;text-align:center;color:#6c757d;">✅ Aucune trouvaille détectée — tous les dépôts sont sains.</td></tr>"""
+    if has_ai_verdict:
+        findings_html = """<tr><td colspan="4" style="padding:20px;text-align:center;color:#28a745;">🎉 Toutes les trouvailles ont été classifiées comme normales/test par l'IA. Aucun vrai secret détecté.</td></tr>"""
+    else:
+        findings_html = """<tr><td colspan="4" style="padding:20px;text-align:center;color:#6c757d;">✅ Aucune trouvaille détectée — tous les dépôts sont sains.</td></tr>"""
 else:
     for sev in ["critical", "high", "medium", "info"]:
         items = [f for f in findings if f.get("severity") == sev]
@@ -410,6 +486,7 @@ html = f"""<!DOCTYPE html>
       <td style="padding:24px 28px;background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;text-align:center;">
         <h1 style="margin:0 0 6px;font-size:22px;font-weight:600;">🔒 Scan Secrets GitHub</h1>
         <p style="margin:0;font-size:14px;opacity:0.85;">Rapport quotidien — ${DATE_HUMAN}</p>
+        <p style="margin:8px 0 0;font-size:12px;opacity:0.75;">🤖 Classifié par IA (OpenAI Codex) — ${FILTERED} trouvailles normales filtrées</p>
       </td>
     </tr>
 
@@ -493,7 +570,13 @@ PYEOF
 echo "  ✅ Email body sauvegardé : $EMAIL_BODY"
 
 # ── Step 5: Send email ──
-EMAIL_SUBJECT="🔒 Rapport Scan Secrets GitHub — ${DATE_HUMAN}"
+AI_LABEL="🤖"
+if [ "$FILTERED" -gt 0 ]; then
+    AI_LABEL="🤖 IA"
+    EMAIL_SUBJECT="🔒 Rapport Scan Secrets GitHub (IA) — ${DATE_HUMAN}"
+else
+    EMAIL_SUBJECT="🔒 Rapport Scan Secrets GitHub — ${DATE_HUMAN}"
+fi
 echo ""
 echo "📤 Sending email..."
 
