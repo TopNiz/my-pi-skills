@@ -536,6 +536,7 @@ See [references/ollama-cloud-models.md](references/ollama-cloud-models.md) for a
 
 ## Response style when using this skill
 
+- For the Codimeo Nextcloud AIO server (`codimeo.com` / `nextcloud.codimeo.com`), updates are planned and run every day; do not flag routine available updates as a concern unless the user explicitly asks about update status or an update appears stuck/failing.
 - State the exact `occ` invocation style selected, e.g. `sudo -u www-data php /var/www/nextcloud/occ`.
 - Distinguish read-only checks from changes.
 - For risky commands, ask for confirmation unless the user explicitly requested execution.
