@@ -8,24 +8,71 @@ allowed-tools: Bash(playwright-cli:*) Bash(npx:*)
 
 ## Golden Rules
 
-1. **`--headed` by default.** Always open the browser in headed mode to avoid captchas (DuckDuckGo, Bing, and Google all block headless browsers aggressively).
-2. **One step at a time.** Execute ONE action, inspect the result, then decide what to do next. Never batch multiple steps in a single bash command or playwright eval.
-3. **Check after every step.** After opening a page: verify it loaded. After filling a form: verify the field has the right value. After clicking: verify the page changed. After extracting results: verify they're meaningful.
-4. **If results are unexpected, STOP and investigate.** Don't blindly continue. Check the page content, check for captchas, check if selectors still match.
-5. **If stuck after 2-3 attempts, ask the user.** They can see the headed browser window and help resolve captchas, selectors, or site-specific issues.
-6. **Close the browser when done.** Always run `playwright-cli close` immediately after the search/browsing task finishes, even if the user did not explicitly ask. Do not leave headed browser windows open.
+1. **Use only workspace-local sessions.** Before starting a browser, list and separate workspace-owned sessions/profiles from outside or ambiguous sessions (see Step 0). Reuse only a suitable workspace session/profile; do not attach to, modify, or close sessions that do not clearly belong to the current workspace.
+2. **`--headed` by default.** Always open the browser in headed mode to avoid captchas (DuckDuckGo, Bing, and Google all block headless browsers aggressively).
+3. **One step at a time.** Execute ONE action, inspect the result, then decide what to do next. Never batch multiple steps in a single bash command or playwright eval.
+4. **Check after every step.** After opening a page: verify it loaded. After filling a form: verify the field has the right value. After clicking: verify the page changed. After extracting results: verify they're meaningful.
+5. **If results are unexpected, STOP and investigate.** Don't blindly continue. Check the page content, check for captchas, check if selectors still match.
+6. **If stuck after 2-3 attempts, ask the user.** They can see the headed browser window and help resolve captchas, selectors, or site-specific issues.
+7. **Close only sessions you created.** Close ad-hoc search sessions only if this agent/session created them. Do not close user-requested persistent workspace sessions or any outside/ambiguous sessions unless the user explicitly identifies them.
 
 ---
 
 ## Step-by-Step Workflow
 
-### Step 1 — Open the browser (headed)
+### Step 0 — Identify workspace-local sessions; ignore outside sessions
+
+Always separate current-workspace sessions/profiles from outside or ambiguous sessions before opening, attaching to, or closing anything.
 
 ```bash
-playwright-cli open "https://lite.duckduckgo.com/lite/" --headed
+# 1) List all currently running playwright-cli sessions (may include other workspaces)
+playwright-cli list
+
+# 2) List current-workspace persistent profile names only
+find "$PWD/.playwright/profiles" -maxdepth 1 -mindepth 1 -type d -exec basename {} \; 2>/dev/null | sort
+
+# 3) Separate open sessions by ownership convention:
+#    workspace-owned = open session name matches a profile under $PWD/.playwright/profiles
+#    outside/ambiguous = every other open session; do not touch without explicit user confirmation
+OPEN_SESSIONS=$(playwright-cli list 2>/dev/null | awk '/^- /{gsub(":$","",$2); print $2}' | sort)
+LOCAL_PROFILES=$(find "$PWD/.playwright/profiles" -maxdepth 1 -mindepth 1 -type d -exec basename {} \; 2>/dev/null | sort)
+printf '%s\n' "Workspace-owned open sessions:"
+comm -12 <(printf '%s\n' "$OPEN_SESSIONS") <(printf '%s\n' "$LOCAL_PROFILES")
+printf '%s\n' "Outside or ambiguous open sessions (do not touch):"
+comm -23 <(printf '%s\n' "$OPEN_SESSIONS") <(printf '%s\n' "$LOCAL_PROFILES")
 ```
 
-**Check:** The command outputs `Browser 'default' opened`. If it shows an error, stop and investigate.
+If a suitable workspace-owned named session is open, use it:
+
+```bash
+playwright-cli -s=<session-name> snapshot
+```
+
+If a suitable workspace profile exists but is not open, reopen it headed using the matching session name:
+
+```bash
+playwright-cli -s=<session-name> open --headed --profile="$PWD/.playwright/profiles/<session-name>" "https://lite.duckduckgo.com/lite/"
+```
+
+If no workspace profile/session exists and a temporary session is needed, create a clearly named workspace session instead of `default` when possible:
+
+```bash
+playwright-cli -s=web-search open --headed "https://lite.duckduckgo.com/lite/"
+```
+
+Never print saved cookies, storage-state, localStorage, or profile contents.
+
+### Step 1 — Open the browser (headed)
+
+Only do this if no suitable workspace session/profile exists. Prefer a clearly named session for this workspace/task.
+
+```bash
+playwright-cli -s=web-search open "https://lite.duckduckgo.com/lite/" --headed
+```
+
+If the CLI forces `default`, treat it as disposable only if this agent/session created it. Do not reuse or close an existing `default` session unless you created it or the user explicitly confirms it is yours.
+
+**Check:** The command outputs that the chosen browser session opened. If it shows an error, stop and investigate.
 
 ### Step 2 — Inspect the page
 
@@ -137,15 +184,19 @@ file path/to/article.pdf && ls -lh path/to/article.pdf
 - This is especially useful for ScienceDirect/EZproxy PDFs that render correctly in the browser but fail when fetched directly with `curl`.
 - Alternative approaches documented online include Playwright `page.waitForEvent('download')` + `download.saveAs(...)`; direct `fetch()`/request API may fail on proxied or signed PDF URLs.
 
-### Step 10 — Close the browser — mandatory final step
+### Step 10 — Close disposable browsers; preserve persistent workspace sessions
 
-Always close the browser after extracting the final results or finishing the requested browsing task:
+After extracting the final results or finishing the requested browsing task, close only the ad-hoc/disposable session that this agent/session created:
 
 ```bash
-playwright-cli close
+playwright-cli -s=web-search close
 ```
 
-**Check:** `Browser 'default' closed` is shown. If it errors because no browser is open, that's fine — the goal is to ensure no headed browser window is left open.
+If you created a different named disposable session, close that exact session name. If the session is `default`, close it only if you know this agent/session created it; otherwise ask first.
+
+If you reused a user-requested persistent workspace session (for example `-s=nespresso` with `.playwright/profiles/nespresso`), leave it open unless the user explicitly asks to close it. Never close outside/ambiguous sessions from `playwright-cli list`.
+
+**Check:** The output names the exact session closed. If it errors because no such browser is open, that's fine.
 
 ---
 
@@ -207,10 +258,10 @@ If any of these appear in the page content:
 | Batch open + fill + submit + extract in one bash command | One action per bash command, inspect between each |
 | Assume selectors like `e1` or `#r1-0` work | Inspect the actual page structure first |
 | Assume no captcha | Check page content after every navigation |
-| Restart browser for every search | Keep browser open, chain searches |
+| Restart browser for every search | Reuse an existing workspace session/profile when available |
 | Ignore empty results | Stop, inspect the page, find why |
 | Keep trying the same failing approach >3 times | Ask the user for help |
-| Forget to close the browser | Always close with `playwright-cli close` as the mandatory final step of every search/browsing task |
+| Close a persistent workspace session without being asked | Close only disposable sessions; preserve user-requested persistent sessions |
 
 ---
 

@@ -8,54 +8,104 @@ allowed-tools: Bash(playwright-cli:*) Bash(npx:*) Bash(npm:*)
 
 **Primary use: browsing & navigating the web.** Web testing is a secondary capability.
 
+## Workspace-local persistent sessions
+
+Before starting a new browser, always check whether the current workspace already has a local persistent Playwright session/profile to reuse. **Only touch sessions that clearly belong to the current workspace or that this agent/session created.** Do not attach to, modify, or close outside/ambiguous sessions.
+
+### List local sessions and separate them from outside sessions
+
+```bash
+# 1) List all currently running playwright-cli sessions (may include other workspaces)
+playwright-cli list
+
+# 2) List current-workspace persistent profile names only
+find "$PWD/.playwright/profiles" -maxdepth 1 -mindepth 1 -type d -exec basename {} \; 2>/dev/null | sort
+
+# 3) Separate open sessions by ownership convention:
+#    workspace-owned = open session name matches a profile under $PWD/.playwright/profiles
+#    outside/ambiguous = every other open session; do not touch without explicit user confirmation
+OPEN_SESSIONS=$(playwright-cli list 2>/dev/null | awk '/^- /{gsub(":$","",$2); print $2}' | sort)
+LOCAL_PROFILES=$(find "$PWD/.playwright/profiles" -maxdepth 1 -mindepth 1 -type d -exec basename {} \; 2>/dev/null | sort)
+printf '%s\n' "Workspace-owned open sessions:"
+comm -12 <(printf '%s\n' "$OPEN_SESSIONS") <(printf '%s\n' "$LOCAL_PROFILES")
+printf '%s\n' "Outside or ambiguous open sessions (do not touch):"
+comm -23 <(printf '%s\n' "$OPEN_SESSIONS") <(printf '%s\n' "$LOCAL_PROFILES")
+```
+
+### Reuse or open only workspace sessions
+
+```bash
+# if a named workspace-owned session is already open, use it
+playwright-cli -s=<session-name> snapshot
+
+# if no session is open but a workspace profile exists, reopen it headed
+# common convention: .playwright/profiles/<session-name>
+playwright-cli -s=<session-name> open --headed --profile="$PWD/.playwright/profiles/<session-name>" https://example.com
+
+# if no workspace profile/session exists and a temporary session is needed,
+# create a clearly named task/workspace session instead of default when possible
+playwright-cli -s=web-browser open --headed https://example.com
+```
+
+Rules:
+- Prefer an existing workspace-owned session over creating a new session.
+- Prefer workspace profiles under `.playwright/profiles/` for sites where the user is already authenticated.
+- Treat open sessions whose names do not match current-workspace profiles as outside/ambiguous; do not use or close them unless the user explicitly identifies them.
+- Prefer named sessions (`-s=<name>`) over `default`. If the CLI forces `default`, touch it only if this agent/session created it.
+- Use `--headed` when reopening persistent sessions so the user can interact with login/captcha/2FA if needed.
+- Never print saved storage-state, cookies, localStorage, or profile contents; they may contain secrets.
+- Only create a new browser/session when no suitable local session/profile exists.
+
 ## Quick start
 
 ```bash
-# open a browser and go to a page (headless by default)
-playwright-cli open https://example.com
+# open a named browser session and go to a page (headless by default)
+playwright-cli -s=web-browser open https://example.com
 # take a snapshot to inspect the page structure
-playwright-cli snapshot
+playwright-cli -s=web-browser snapshot
 # navigate to another page
-playwright-cli goto https://other-page.com
-# close the browser when done
-playwright-cli close
+playwright-cli -s=web-browser goto https://other-page.com
+# close only the session you created when done
+playwright-cli -s=web-browser close
 ```
 
 ## Typical browsing workflow
 
 ```bash
-# 1. Open and navigate
-playwright-cli open https://example.com
+# 1. Open and navigate using a named session owned by this task/workspace
+playwright-cli -s=web-browser open https://example.com
 
 # 2. Snapshot shows the page with element refs (e1, e2, …)
-playwright-cli snapshot
+playwright-cli -s=web-browser snapshot
 
 # 3. Interact — click, fill, scroll
-playwright-cli click e5        # click element (use ref from snapshot)
-playwright-cli fill e3 "text"  # fill input field
-playwright-cli press Enter
+playwright-cli -s=web-browser click e5        # click element (use ref from snapshot)
+playwright-cli -s=web-browser fill e3 "text"  # fill input field
+playwright-cli -s=web-browser press Enter
 
 # 4. Check what's on the page now
-playwright-cli --raw eval "() => document.body.innerText.slice(0, 3000)"
+playwright-cli -s=web-browser --raw eval "() => document.body.innerText.slice(0, 3000)"
 
 # 5. Navigate somewhere else
-playwright-cli goto https://another-site.com
+playwright-cli -s=web-browser goto https://another-site.com
 
-# 6. Close
-playwright-cli close
+# 6. Close only this disposable session
+playwright-cli -s=web-browser close
 ```
 
 > **Tip**: Use `playwright-cli goto <url>` instead of `curl` for interactive browsing — it handles JS-rendered pages, forms, redirects, and dynamic content.
 
 ## Commands
 
+Unless the user explicitly identified a different workspace-owned session, scope commands with `-s=<session-name>` for the session you created or selected. Do not run unscoped commands when outside/ambiguous sessions exist.
+
 ### Core
 
 ```bash
-playwright-cli open
+playwright-cli -s=<session-name> open
 # open and navigate right away
-playwright-cli open https://example.com/
-playwright-cli goto https://playwright.dev
+playwright-cli -s=<session-name> open https://example.com/
+playwright-cli -s=<session-name> goto https://playwright.dev
 playwright-cli type "search query"
 playwright-cli click e3
 playwright-cli dblclick e7
@@ -77,7 +127,7 @@ playwright-cli dialog-accept
 playwright-cli dialog-accept "confirmation text"
 playwright-cli dialog-dismiss
 playwright-cli resize 1920 1080
-playwright-cli close
+playwright-cli -s=<session-name> close
 ```
 
 ### Navigation
@@ -221,10 +271,10 @@ playwright-cli attach --extension
 # Start with config file
 playwright-cli open --config=my-config.json
 
-# Close the browser
-playwright-cli close
-# Delete user data for the default session
-playwright-cli delete-data
+# Close only the browser session you created or the user explicitly identified
+playwright-cli -s=<session-name> close
+# Delete user data only for a session/profile you created or the user explicitly identified
+playwright-cli -s=<session-name> delete-data
 ```
 
 ## Snapshots
@@ -285,19 +335,31 @@ playwright-cli click "getByTestId('submit-button')"
 ## Browser Sessions
 
 ```bash
-# create new browser session named "mysession" with persistent profile
+# first separate current-workspace sessions/profiles from outside/ambiguous sessions
+playwright-cli list
+find "$PWD/.playwright/profiles" -maxdepth 1 -mindepth 1 -type d -exec basename {} \; 2>/dev/null | sort
+
+OPEN_SESSIONS=$(playwright-cli list 2>/dev/null | awk '/^- /{gsub(":$","",$2); print $2}' | sort)
+LOCAL_PROFILES=$(find "$PWD/.playwright/profiles" -maxdepth 1 -mindepth 1 -type d -exec basename {} \; 2>/dev/null | sort)
+printf '%s\n' "Workspace-owned open sessions:"
+comm -12 <(printf '%s\n' "$OPEN_SESSIONS") <(printf '%s\n' "$LOCAL_PROFILES")
+printf '%s\n' "Outside or ambiguous open sessions (do not touch):"
+comm -23 <(printf '%s\n' "$OPEN_SESSIONS") <(printf '%s\n' "$LOCAL_PROFILES")
+
+# reuse an existing workspace profile as a named, headed session
+playwright-cli -s=mysession open --headed --profile="$PWD/.playwright/profiles/mysession" https://example.com
+
+# create a new named browser session only when no suitable workspace session/profile exists
 playwright-cli -s=mysession open example.com --persistent
-# same with manually specified profile directory (use when requested explicitly)
-playwright-cli -s=mysession open example.com --profile=/path/to/profile
+# same with a manually specified profile directory, only when requested explicitly
+playwright-cli -s=mysession open example.com --profile="$PWD/.playwright/profiles/mysession"
 playwright-cli -s=mysession click e6
-playwright-cli -s=mysession close  # stop a named browser
-playwright-cli -s=mysession delete-data  # delete user data for persistent session
+playwright-cli -s=mysession close  # stop only this named browser if you created it or the user identified it
+playwright-cli -s=mysession delete-data  # only for a profile/session you created or the user identified
 
 playwright-cli list
-# Close all browsers
-playwright-cli close-all
-# Forcefully kill all browser processes
-playwright-cli kill-all
+# Do NOT use close-all or kill-all unless the user explicitly requests it and confirms every affected session belongs to this task/workspace.
+# Never close/kill outside or ambiguous sessions.
 ```
 
 ## Installation
@@ -317,45 +379,45 @@ npm install -g @playwright/cli@latest
 ## Example: Form submission
 
 ```bash
-playwright-cli open https://example.com/form
-playwright-cli snapshot
+playwright-cli -s=web-browser open https://example.com/form
+playwright-cli -s=web-browser snapshot
 
-playwright-cli fill e1 "user@example.com"
-playwright-cli fill e2 "password123"
-playwright-cli click e3
-playwright-cli snapshot
-playwright-cli close
+playwright-cli -s=web-browser fill e1 "user@example.com"
+playwright-cli -s=web-browser fill e2 "password123"
+playwright-cli -s=web-browser click e3
+playwright-cli -s=web-browser snapshot
+playwright-cli -s=web-browser close
 ```
 
 ## Example: Multi-tab workflow
 
 ```bash
-playwright-cli open https://example.com
-playwright-cli tab-new https://example.com/other
-playwright-cli tab-list
-playwright-cli tab-select 0
-playwright-cli snapshot
-playwright-cli close
+playwright-cli -s=web-browser open https://example.com
+playwright-cli -s=web-browser tab-new https://example.com/other
+playwright-cli -s=web-browser tab-list
+playwright-cli -s=web-browser tab-select 0
+playwright-cli -s=web-browser snapshot
+playwright-cli -s=web-browser close
 ```
 
 ## Example: Debugging with DevTools
 
 ```bash
-playwright-cli open https://example.com
-playwright-cli click e4
-playwright-cli fill e7 "test"
-playwright-cli console
-playwright-cli network
-playwright-cli close
+playwright-cli -s=web-browser open https://example.com
+playwright-cli -s=web-browser click e4
+playwright-cli -s=web-browser fill e7 "test"
+playwright-cli -s=web-browser console
+playwright-cli -s=web-browser network
+playwright-cli -s=web-browser close
 ```
 
 ```bash
-playwright-cli open https://example.com
-playwright-cli tracing-start
-playwright-cli click e4
-playwright-cli fill e7 "test"
-playwright-cli tracing-stop
-playwright-cli close
+playwright-cli -s=web-browser open https://example.com
+playwright-cli -s=web-browser tracing-start
+playwright-cli -s=web-browser click e4
+playwright-cli -s=web-browser fill e7 "test"
+playwright-cli -s=web-browser tracing-stop
+playwright-cli -s=web-browser close
 ```
 
 ## Specific tasks
