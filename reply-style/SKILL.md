@@ -169,37 +169,48 @@ Use **HTML signatures** when sending HTML-formatted replies. Use **plain text si
 
 #### French signature — HTML (for all French HTML replies)
 
-Uses your Apple Mail signature colors: **blue `#253887`** and **orange `#ff9300`**.
+Uses your Chain-IT Apple Mail signature colors: **red `#d81e00`** and **grey `#797979` / `#424242`**. Preserve these colors and the Futura font when creating HTML drafts.
 
 ```html
-<div style="font-family: Helvetica; font-size: 12px; color: rgb(0, 0, 0);">
-  <span style="font-size: 16px;">
-    <b><font style="color: rgb(37, 56, 135);">Upgrade-code .&nbsp;</font><font color="#ff9300">org</font></b>
-  </span><br>
-  <b style="color: rgb(37, 56, 135);">{{NAME}}</b><br>
-  <font color="#253887">{{TITLE}}</font><br>
-  <br>
-  <font color="#253887">FR Mobile :&nbsp;<span>{{PHONE}}</span></font><br>
-  <font color="#253887">eMail :&nbsp;<a href="mailto:{{EMAIL}}" style="color: rgb(37, 56, 135);">{{EMAIL}}</a></font><br>
-  <font color="#253887">Facebook :&nbsp;<a href="{{FACEBOOK}}" style="color: rgb(37, 56, 135);">{{FACEBOOK}}</a></font><br>
-  <font color="#253887">Twitter :&nbsp;<a href="{{TWITTER}}" style="color: rgb(37, 56, 135);">{{TWITTER}}</a></font><br>
-  <font color="#253887">Web :&nbsp;<a href="{{WEBSITE}}" style="color: rgb(37, 56, 135);">{{WEBSITE}}</a></font>
-  <br><br>
-  <font color="#999" style="font-size: 11px;">🤖 Message généré par IA et approuvé par lui ✨</font>
+<div id="AppleMailSignature">
+  <meta charset="UTF-8">
+  <div dir="auto" style="caret-color: rgb(0, 0, 0); color: rgb(0, 0, 0); letter-spacing: normal; text-align: start; text-indent: 0px; text-transform: none; white-space: normal; word-spacing: 0px; text-decoration-line: none; overflow-wrap: break-word; -webkit-nbsp-mode: space; line-break: after-white-space;">
+    <div class="ApplePlainTextBody">
+      <font face="Futura"><font size="4"><span style="font-style: normal;"><font color="#d81e00">Chain-</font><font color="#797979">IT&nbsp;</font><font color="#d81e00">. com</font></span></font><br></font>
+    </div>
+    <div class="ApplePlainTextBody">
+      <font face="Futura">
+        <font color="#424242"><b>{{NAME}}</b></font><br>
+        <font color="#424242">{{TITLE}}</font><br><br>
+        <font color="#424242">FR Mobile :</font><span class="Apple-tab-span" style="color: rgb(66, 66, 66); white-space: pre;">\t</span><font color="#424242">{{PHONE}}</font><br>
+        <font color="#424242">eMail:<span class="Apple-tab-span" style="white-space: pre;">\t\t</span>{{EMAIL}}<br>Web:<span class="Apple-tab-span" style="white-space: pre;">\t\t</span>{{WEBSITE}}</font><br>
+        <font color="#424242">______________________________________________________________</font><br>
+        <font color="#424242">Ce message et toutes les pièces jointes sont établis&nbsp;à l'intention exclusive de ses destinataires et sont&nbsp;confidentiels. Si vous recevez ce message par&nbsp;erreur, merci de le détruire et d'en avertir&nbsp;immédiatement l'expéditeur. Toute utilisation ou&nbsp;diffusion non autorisée de ce message est interdite.</font><br>
+        <font color="#424242">Internet ne permettant pas d'assurer l'intégrité de ce&nbsp;message, Chain-IT.com décline toute&nbsp;responsabilité en cas d'altération ou de&nbsp;modification.</font><br>
+        <font color="#424242">&nbsp;</font><br>
+        <font color="#424242">Pensez à l'environnement, n'imprimez ce message&nbsp;qu'en cas de nécessité !</font><br>
+        <font color="#999" style="font-size: 11px;">🤖 Message généré par IA et approuvé par lui ✨</font>
+      </font>
+    </div>
+  </div>
 </div>
 ```
 
 #### French signature — Plain text (for French plain text replies)
 
 ```
+Chain-IT . com
 {{NAME}}
 {{TITLE}}
 
 FR Mobile :	{{PHONE}}
 eMail:		{{EMAIL}}
-Facebook : 	{{FACEBOOK}}
-Twitter : 		{{TWITTER}}
 Web:		{{WEBSITE}}
+______________________________________________________________
+Ce message et toutes les pièces jointes sont établis à l'intention exclusive de ses destinataires et sont confidentiels. Si vous recevez ce message par erreur, merci de le détruire et d'en avertir immédiatement l'expéditeur. Toute utilisation ou diffusion non autorisée de ce message est interdite.
+Internet ne permettant pas d'assurer l'intégrité de ce message, Chain-IT.com décline toute responsabilité en cas d'altération ou de modification.
+
+Pensez à l'environnement, n'imprimez ce message qu'en cas de nécessité !
 🤖 Message généré par IA et approuvé par lui ;-)
 ```
 
@@ -208,34 +219,45 @@ Web:		{{WEBSITE}}
 Same Apple Mail styling, adapted for English.
 
 ```html
-<div style="font-family: Helvetica; font-size: 12px; color: rgb(0, 0, 0);">
-  <span style="font-size: 16px;">
-    <b><font style="color: rgb(37, 56, 135);">Upgrade-code&nbsp;</font><font color="#ff9300">.org</font></b>
-  </span><br>
-  <b style="color: rgb(37, 56, 135);">{{NAME}}</b><br>
-  <font color="#253887">{{TITLE}}</font><br>
-  <br>
-  <font color="#253887">Tel :&nbsp;<span>{{PHONE}}</span></font><br>
-  <font color="#253887">Email :&nbsp;<a href="mailto:{{EMAIL}}" style="color: rgb(37, 56, 135);">{{EMAIL}}</a></font><br>
-  <font color="#253887">Facebook :&nbsp;<a href="{{FACEBOOK}}" style="color: rgb(37, 56, 135);">{{FACEBOOK}}</a></font><br>
-  <font color="#253887">Twitter :&nbsp;<a href="{{TWITTER}}" style="color: rgb(37, 56, 135);">{{TWITTER}}</a></font><br>
-  <font color="#253887">Web :&nbsp;<a href="{{WEBSITE}}" style="color: rgb(37, 56, 135);">{{WEBSITE}}</a></font>
-  <br><br>
-  <font color="#999" style="font-size: 11px;">🤖 AI generated message and approved by him ✨</font>
+<div id="AppleMailSignature">
+  <meta charset="UTF-8">
+  <div dir="auto" style="caret-color: rgb(0, 0, 0); color: rgb(0, 0, 0); letter-spacing: normal; text-align: start; text-indent: 0px; text-transform: none; white-space: normal; word-spacing: 0px; text-decoration-line: none; overflow-wrap: break-word; -webkit-nbsp-mode: space; line-break: after-white-space;">
+    <div class="ApplePlainTextBody">
+      <font face="Futura"><font size="4"><span style="font-style: normal;"><font color="#d81e00">Chain-</font><font color="#797979">IT&nbsp;</font><font color="#d81e00">. com</font></span></font><br></font>
+    </div>
+    <div class="ApplePlainTextBody">
+      <font face="Futura">
+        <font color="#424242"><b>{{NAME}}</b></font><br>
+        <font color="#424242">{{TITLE}}</font><br><br>
+        <font color="#424242">Mobile:</font><span class="Apple-tab-span" style="color: rgb(66, 66, 66); white-space: pre;">\t</span><font color="#424242">{{PHONE}}</font><br>
+        <font color="#424242">Email:<span class="Apple-tab-span" style="white-space: pre;">\t\t</span>{{EMAIL}}<br>Web:<span class="Apple-tab-span" style="white-space: pre;">\t\t</span>{{WEBSITE}}</font><br>
+        <font color="#424242">______________________________________________________________</font><br>
+        <font color="#424242">This message and any attachments are intended solely for their recipients and are confidential. If you received this message in error, please delete it and notify the sender immediately. Any unauthorized use or distribution is prohibited.</font><br>
+        <font color="#424242">Because internet communications cannot guarantee message integrity, Chain-IT.com accepts no liability for alteration or modification.</font><br>
+        <font color="#424242">&nbsp;</font><br>
+        <font color="#424242">Please consider the environment before printing this message.</font><br>
+        <font color="#999" style="font-size: 11px;">🤖 AI generated message and approved by him ✨</font>
+      </font>
+    </div>
+  </div>
 </div>
 ```
 
 #### English signature — Plain text (for English plain text replies)
 
 ```
+Chain-IT . com
 {{NAME}}
 {{TITLE}}
 
-Tel: {{PHONE}}
-Email: {{EMAIL}}
-Facebook : {{FACEBOOK}}
-Twitter : {{TWITTER}}
-{{WEBSITE}}
+Mobile:	{{PHONE}}
+Email:	{{EMAIL}}
+Web:	{{WEBSITE}}
+______________________________________________________________
+This message and any attachments are intended solely for their recipients and are confidential. If you received this message in error, please delete it and notify the sender immediately. Any unauthorized use or distribution is prohibited.
+Because internet communications cannot guarantee message integrity, Chain-IT.com accepts no liability for alteration or modification.
+
+Please consider the environment before printing this message.
 🤖 AI generated message and approved by him ;-)
 ```
 
