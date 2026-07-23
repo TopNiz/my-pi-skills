@@ -325,6 +325,21 @@ ssh -o ServerAliveInterval=60 <host-alias>
 # This is not in your current config, but useful for long-running sessions
 ```
 
+### 7. Windows hosts and MSYS2
+
+Windows SSH hosts, including `pc-master.local`, intentionally use PowerShell as their default interactive OpenSSH shell. Keep that default: it provides reliable interactive sessions.
+
+PC Master also has MSYS2 Bash at `C:/msys64/usr/bin/bash.exe`. Use it for **non-interactive** Unix-style commands by explicitly invoking it through PowerShell:
+
+```bash
+ssh -o RemoteCommand=none -o RequestTTY=no pc-master.local \
+  '& C:/msys64/usr/bin/bash.exe -lc "uname -s; pwd; command -v git"'
+```
+
+The PowerShell `&` call operator is required. MSYS2 resolves its home directory as `/home/nizar`.
+
+> **Important:** Windows OpenSSH on PC Master does not execute a configured remote command when a TTY is allocated; it opens `conhost` and closes instead. Therefore, do **not** add an interactive MSYS2 SSH alias with `RemoteCommand` and `RequestTTY yes`. It will not work. Use the normal PowerShell alias (`ssh pc-master.local`) for interactive work, and invoke MSYS2 explicitly only for non-interactive commands.
+
 ---
 
 ## 📚 Reference Documents
