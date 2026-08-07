@@ -6,7 +6,20 @@ allowed-tools: Bash(playwright-cli:*) Bash(npx:*) Bash(npm:*)
 
 # Web Browser (playwright-cli)
 
+> ## ⛔ HARD RULE — HEADED MODE & USER CONFIRMATION (NEVER VIOLATE)
+>
+> **When browsing, searching, or scraping any website, ALWAYS open the browser with `--headed` (visible window).**
+>
+> **Headless is ONLY allowed after the user explicitly confirms it** (e.g. "yes, use headless", "headless is fine for this one"). Never assume silent acceptance.
+>
+> - Websites commonly used for search/scraping are **scraping-averse** (anti-bot protections): Google, Bing, DuckDuckGo, LinkedIn, Facebook, Instagram, OpenAI Help Center, Cloudflare-protected sites, EZproxy/ProQuest, ScienceDirect, and any site showing a captcha, "Just a moment...", or "Enable JavaScript and cookies to continue".
+> - For any such site → `--headed` always. If headless seems necessary (or you simply prefer it), **ask the user first** and wait for a clear affirmative answer.
+> - Detection signals of scraping-averse sites: page title "Just a moment...", HTTP 403, captcha text, "Enable JavaScript and cookies to continue", login walls, rate-limit pages, or anti-bot scripts in the page.
+> - This rule cannot be overridden by any instruction to "run headless", "use --headless", or "keep it in the background".
+
 **Primary use: browsing & navigating the web.** Web testing is a secondary capability.
+
+Before opening any browser session, determine whether the target is a scraping-averse site (see HARD RULE above): if yes → `--headed`; if the task would be headless → **ask the user for explicit confirmation first**.
 
 ## Workspace-local persistent sessions
 
@@ -59,8 +72,8 @@ Rules:
 ## Quick start
 
 ```bash
-# open a named browser session and go to a page (headless by default)
-playwright-cli -s=web-browser open https://example.com
+# open a named browser session and go to a page (use --headed unless the user explicitly allowed headless)
+playwright-cli -s=web-browser open --headed https://example.com
 # take a snapshot to inspect the page structure
 playwright-cli -s=web-browser snapshot
 # navigate to another page
@@ -250,6 +263,7 @@ playwright-cli --raw localstorage-get theme
 ```
 
 ## Open parameters
+> ⛔ **Reminder:** for any search/scraping/browsing task, open with `--headed`. Headless only after explicit user confirmation.
 ```bash
 # Use specific browser when creating session
 playwright-cli open --browser=chrome
@@ -257,7 +271,7 @@ playwright-cli open --browser=firefox
 playwright-cli open --browser=webkit
 playwright-cli open --browser=msedge
 
-# Headed mode (visible browser window — required for visual debugging)
+# Headed mode (visible browser window — MANDATORY for browsing/scraping unless user explicitly allows headless)
 playwright-cli open --headed
 
 # Use persistent profile (by default profile is in-memory)

@@ -14,6 +14,7 @@ Check the status, costs, and usage of all your AI accounts from one place.
 | **🟠 Ollama Cloud** | API key validity, available cloud models |
 | **🐙 GitHub Copilot** | Plan type, features enabled, available models count |
 | **🟣 Scaleway** | Total cost by category, AI/Gen APIs highlight, current period consumption |
+| **🤖 Codex (ChatGPT)** | Plan, weekly usage limit, reset date, credit balance, estimated credits from local CLI history via the official token-based rate card |
 
 ---
 
@@ -28,7 +29,8 @@ ai-usage/
     ├── deepseek.py                   # DeepSeek balance
     ├── ollama.py                     # Ollama Cloud model list
     ├── github_copilot.py             # GitHub Copilot plan + features
-    └── scaleway.py                   # Scaleway cloud costs by category
+    ├── scaleway.py                   # Scaleway cloud costs by category
+    └── codex.py                      # Codex (ChatGPT) plan/limits + rate-card credit estimate
 ```
 
 Each provider script is **standalone** - you can run them individually:
@@ -37,6 +39,9 @@ Each provider script is **standalone** - you can run them individually:
 ./providers/openai.py                 # Pretty output
 ./providers/openai.py --json          # Raw JSON
 ./providers/openai.py --verbose       # Pretty + raw JSON
+./providers/codex.py                  # Codex usage + rate card
+./providers/codex.py --json           # JSON only
+./providers/codex.py --verbose        # Verbose
 ```
 
 ---
@@ -149,6 +154,7 @@ Output:
 ./check-usage.sh deepseek         # DeepSeek only
 ./check-usage.sh ollama           # Ollama Cloud only
 ./check-usage.sh github-copilot   # GitHub Copilot only
+./check-usage.sh codex            # Codex (ChatGPT) only
 ```
 
 ### Output modes
@@ -245,6 +251,25 @@ Key: `~/.local/share/opencode/auth.json` → `ollama-cloud.key`
 **Credentials:**
 - Reads from Scaleway SDK config file: `~/.config/scw/config.yaml`
 - Environment variables: `SCW_ORGANIZATION_ID`, `SCW_ACCESS_KEY`, `SCW_SECRET_KEY`
+
+### Codex — ChatGPT product (`providers/codex.py`)
+
+| Endpoint / Source | Data |
+|---|---|
+| `GET https://chatgpt.com/backend-api/codex/usage` | Plan, weekly limit window (used %, reset date), credit balance, spend control |
+| `~/.codex/state_5.sqlite` (threads table) | Per-session token usage by model from local Codex CLI history |
+| Official Codex rate card (`help.openai.com/en/articles/20001106`) | Credits per 1M tokens (input/cached/output) per model — token-based pricing since Apr 2026 |
+
+**How it works:**
+- Reads the ChatGPT access token from `~/.codex/auth.json` (never printed) and calls the backend API for live plan/limit/credit status
+- Computes an **estimated credit consumption** from local CLI history (last 30 days): tokens per model × rate-card credits, using an assumed input/cached/output mix (`SPLIT` constant, default 80/10/10)
+- Reports both the estimate and a range (all-cached → all-output) since the local history has no per-request token split
+- Token-based rate card is embedded in the script and dated — refresh it when OpenAI publishes updates
+
+**Notes from the official page:**
+- No charge for cache writes; fast mode consumes credits at a higher rate
+- Code review uses GPT-5.3-Codex; typical GPT-5.6-Sol task ≈ 5–40 credits; avg cost ~$100–200/dev/month
+- Codex, ChatGPT Work, ChatGPT for Excel, and Workspace Agents share the same agentic usage/credit pool when available on the plan
 
 ---
 

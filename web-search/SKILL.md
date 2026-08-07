@@ -9,7 +9,7 @@ allowed-tools: Bash(playwright-cli:*) Bash(npx:*)
 ## Golden Rules
 
 1. **Use only workspace-local sessions.** Before starting a browser, list and separate workspace-owned sessions/profiles from outside or ambiguous sessions (see Step 0). Reuse only a suitable workspace session/profile; do not attach to, modify, or close sessions that do not clearly belong to the current workspace.
-2. **`--headed` by default.** Always open the browser in headed mode to avoid captchas (DuckDuckGo, Bing, and Google all block headless browsers aggressively).
+2. **`--headed` MANDATORY for search/scraping — headless only with explicit user confirmation.** Always open the browser in headed mode: DuckDuckGo, Bing, Google, and most scraping-averse sites (Cloudflare-protected, LinkedIn, OpenAI Help Center, EZproxy/ProQuest, ScienceDirect, captcha-walled pages…) block headless browsers aggressively. If headless seems necessary or is requested, **ask the user first and wait for a clear affirmative answer** — never run headless silently. Detection signals: "Just a moment...", HTTP 403, "Enable JavaScript and cookies to continue", captcha text, login walls, rate-limit pages.
 3. **One step at a time.** Execute ONE action, inspect the result, then decide what to do next. Never batch multiple steps in a single bash command or playwright eval.
 4. **Check after every step.** After opening a page: verify it loaded. After filling a form: verify the field has the right value. After clicking: verify the page changed. After extracting results: verify they're meaningful.
 5. **If results are unexpected, STOP and investigate.** Don't blindly continue. Check the page content, check for captchas, check if selectors still match.
@@ -63,6 +63,8 @@ playwright-cli -s=web-search open --headed "https://lite.duckduckgo.com/lite/"
 Never print saved cookies, storage-state, localStorage, or profile contents.
 
 ### Step 1 — Open the browser (headed)
+
+> ⛔ **HARD RULE:** `--headed` is mandatory for search/scraping. Headless only after the user explicitly confirms it. If in doubt → ask the user first.
 
 Only do this if no suitable workspace session/profile exists. Prefer a clearly named session for this workspace/task.
 
@@ -223,15 +225,17 @@ https://html.duckduckgo.com/html/
 ```
 https://www.google.com/search?q=your+query
 ```
-- Most aggressive with captchas — use `--headed` and expect user help
+- Most aggressive with captchas — `--headed` always (never headless without explicit user confirmation)
 - Results: `a[jsname]` or `div.yuRUbf a`
 
 ### Bing (fallback if DDG fails)
 ```
 https://www.bing.com/search?q=your+query
 ```
-- Less aggressive than Google but still blocks headless
+- Less aggressive than Google but still blocks headless — `--headed` always
 - Results: `li.b_algo h2 a`
+
+**Scraping-averse sites (headless requires explicit user confirmation):** Google, Bing, DuckDuckGo, LinkedIn, Facebook, Instagram, OpenAI Help Center, Cloudflare-protected sites, EZproxy/ProQuest, ScienceDirect, captcha/login-walled pages. Detect via: "Just a moment..." title, HTTP 403, "Enable JavaScript and cookies to continue", captcha text, rate-limit pages.
 
 **If one engine blocks you:** Try another. If all block, ask the user to solve the captcha in the headed window.
 
