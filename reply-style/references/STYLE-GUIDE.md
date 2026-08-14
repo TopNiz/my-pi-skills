@@ -97,18 +97,17 @@ Your signature **must match the language of the reply**. Two versions exist in b
 Uses your Chain-IT Apple Mail signature colors: **red `#d81e00`** and **grey `#797979` / `#424242`**. Preserve these colors and the Futura font when creating HTML drafts.
 
 ```html
-<div id="AppleMailSignature">
-  <meta charset="UTF-8">
+<div>
   <div dir="auto" style="caret-color: rgb(0, 0, 0); color: rgb(0, 0, 0); letter-spacing: normal; text-align: start; text-indent: 0px; text-transform: none; white-space: normal; word-spacing: 0px; text-decoration-line: none; overflow-wrap: break-word; -webkit-nbsp-mode: space; line-break: after-white-space;">
-    <div class="ApplePlainTextBody">
+    <div>
       <font face="Futura"><font size="4"><span style="font-style: normal;"><font color="#d81e00">Chain-</font><font color="#797979">IT&nbsp;</font><font color="#d81e00">. com</font></span></font><br></font>
     </div>
-    <div class="ApplePlainTextBody">
+    <div>
       <font face="Futura">
         <font color="#424242"><b>{{NAME}}</b></font><br>
         <font color="#424242">{{TITLE}}</font><br><br>
-        <font color="#424242">FR Mobile :</font><span class="Apple-tab-span" style="color: rgb(66, 66, 66); white-space: pre;">\t</span><font color="#424242">{{PHONE}}</font><br>
-        <font color="#424242">eMail:<span class="Apple-tab-span" style="white-space: pre;">\t\t</span>{{EMAIL}}<br>Web:<span class="Apple-tab-span" style="white-space: pre;">\t\t</span>{{WEBSITE}}</font><br>
+        <font color="#424242">FR Mobile :</font><span class="Apple-tab-span" style="color: rgb(66, 66, 66); white-space: pre;">	</span><font color="#424242">{{PHONE}}</font><br>
+        <font color="#424242">eMail:<span class="Apple-tab-span" style="white-space: pre;">		</span>{{EMAIL}}<br>Web:<span class="Apple-tab-span" style="white-space: pre;">		</span>{{WEBSITE}}</font><br>
         <font color="#424242">______________________________________________________________</font><br>
         <font color="#424242">Ce message et toutes les pièces jointes sont établis&nbsp;à l'intention exclusive de ses destinataires et sont&nbsp;confidentiels. Si vous recevez ce message par&nbsp;erreur, merci de le détruire et d'en avertir&nbsp;immédiatement l'expéditeur. Toute utilisation ou&nbsp;diffusion non autorisée de ce message est interdite.</font><br>
         <font color="#424242">Internet ne permettant pas d'assurer l'intégrité de ce&nbsp;message, Chain-IT.com décline toute&nbsp;responsabilité en cas d'altération ou de&nbsp;modification.</font><br>
@@ -120,6 +119,8 @@ Uses your Chain-IT Apple Mail signature colors: **red `#d81e00`** and **grey `#7
   </div>
 </div>
 ```
+
+> **⚠️ Real tab characters:** The `Apple-tab-span` elements in the HTML signature above contain **real tab characters**, not the literal text `\t`. If you copy this signature, keep the actual tab characters — a literal `\t` text renders as "\t" in the email and breaks the column alignment (see French signature — Plain text for the same content).
 
 ### French signature — Plain text
 
@@ -144,18 +145,17 @@ Pensez à l'environnement, n'imprimez ce message qu'en cas de nécessité !
 Same Apple Mail styling, adapted for English.
 
 ```html
-<div id="AppleMailSignature">
-  <meta charset="UTF-8">
+<div>
   <div dir="auto" style="caret-color: rgb(0, 0, 0); color: rgb(0, 0, 0); letter-spacing: normal; text-align: start; text-indent: 0px; text-transform: none; white-space: normal; word-spacing: 0px; text-decoration-line: none; overflow-wrap: break-word; -webkit-nbsp-mode: space; line-break: after-white-space;">
-    <div class="ApplePlainTextBody">
+    <div>
       <font face="Futura"><font size="4"><span style="font-style: normal;"><font color="#d81e00">Chain-</font><font color="#797979">IT&nbsp;</font><font color="#d81e00">. com</font></span></font><br></font>
     </div>
-    <div class="ApplePlainTextBody">
+    <div>
       <font face="Futura">
         <font color="#424242"><b>{{NAME}}</b></font><br>
         <font color="#424242">{{TITLE}}</font><br><br>
-        <font color="#424242">Mobile:</font><span class="Apple-tab-span" style="color: rgb(66, 66, 66); white-space: pre;">\t</span><font color="#424242">{{PHONE}}</font><br>
-        <font color="#424242">Email:<span class="Apple-tab-span" style="white-space: pre;">\t\t</span>{{EMAIL}}<br>Web:<span class="Apple-tab-span" style="white-space: pre;">\t\t</span>{{WEBSITE}}</font><br>
+        <font color="#424242">Mobile:</font><span class="Apple-tab-span" style="color: rgb(66, 66, 66); white-space: pre;">	</span><font color="#424242">{{PHONE}}</font><br>
+        <font color="#424242">Email:<span class="Apple-tab-span" style="white-space: pre;">		</span>{{EMAIL}}<br>Web:<span class="Apple-tab-span" style="white-space: pre;">		</span>{{WEBSITE}}</font><br>
         <font color="#424242">______________________________________________________________</font><br>
         <font color="#424242">This message and any attachments are intended solely for their recipients and are confidential. If you received this message in error, please delete it and notify the sender immediately. Any unauthorized use or distribution is prohibited.</font><br>
         <font color="#424242">Because internet communications cannot guarantee message integrity, Chain-IT.com accepts no liability for alteration or modification.</font><br>
