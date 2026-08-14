@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # login.sh — Open a Freebox API session
 # Reads app_token and app_id from keychain, computes HMAC-SHA1, stores session_token in keychain
+# NOTE: this script NEVER triggers the Freebox LCD authorization flow.
+# If the stored app token is invalid, it exits with guidance — re-auth requires the LCD.
 set -euo pipefail
 
 # ── Read credentials from keychain ──────────────────────────────
@@ -40,6 +42,13 @@ d = json.load(sys.stdin)
 print(f\"  error_code: {d.get('error_code', 'N/A')}\")
 print(f\"  msg: {d.get('msg', 'N/A')}\")
 " 2>/dev/null || echo "$RESPONSE"
+  ERR=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error_code',''))" 2>/dev/null || true)
+  if [ "$ERR" = "invalid_token" ] || [ "$ERR" = "pending_token" ]; then
+    echo ""
+    echo "⛔ The stored app token is unusable — do NOT request a new authorization."
+    echo "   Re-authorization requires the Freebox LCD (physical access)."
+    echo "   Stop and ask the user for explicit confirmation first."
+  fi
   exit 1
 fi
 

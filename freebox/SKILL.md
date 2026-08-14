@@ -55,6 +55,8 @@ A complete copy of the official FreeboxOS API docs is available at `docs/*.html`
 
 > **🔒 Security note**: All credentials are read exclusively from macOS keychain. Never echo, print, or pipe them through tools that output to stdout (e.g., avoid `python3 -m json.tool` on auth responses). Use `security find-generic-password -w` to source them directly into shell variables.
 
+> **🚨 MANDATORY — Verify before you authenticate**: Before ANY authentication request (or when any API call fails with `auth_required` / `invalid_token` / `pending_token`), **first verify the stored keychain token** with `scripts/verify.sh`. If the stored token is valid, **do NOT re-authenticate** — never run the Setup/authorize flow. The user may be remote with no access to the Freebox LCD. Only request a new authorization after the user explicitly confirms they can physically approve on the LCD.
+
 ---
 
 ## Project Structure
@@ -98,19 +100,42 @@ freebox/
 ## Quick Start
 
 ```bash
-# Discover your Freebox on the network
-bash ~/.agents/skills/freebox/scripts/discover.sh
+# 1. VERIFY the stored app token (SAFE — never touches the Freebox LCD)
+bash ~/.agents/skills/freebox/scripts/verify.sh
 
-# Open a session (stores session_token in keychain)
+# 2. If valid → open a session (uses keychain token only, no LCD needed)
 bash ~/.agents/skills/freebox/scripts/login.sh
 
-# Make an authenticated call
+# 3. Make an authenticated call
 bash ~/.agents/skills/freebox/scripts/call.sh GET /connection/
 ```
 
 ---
 
+## ✅ Verify Stored Credentials First (MANDATORY)
+
+**Before any authentication request — or whenever any API call fails with `auth_required` / `invalid_token` / `pending_token` — follow this order:**
+
+1. **Check the keychain for an existing app token:**
+   ```bash
+   security find-generic-password -a "freebox" -s "freebox-app-token" -w >/dev/null 2>&1 && echo "token present" || echo "token missing"
+   ```
+2. **If present, verify it is valid** (this NEVER touches the LCD — it only opens a session with the stored token):
+   ```bash
+   bash ~/.agents/skills/freebox/scripts/verify.sh
+   ```
+3. **If the token is valid → STOP. Do NOT request a new authorization. Do NOT run the Setup flow below.** The user may be remote and cannot approve on the Freebox LCD. Proceed with the API (verify.sh refreshes the session token automatically).
+4. **Only if the token is missing OR invalid (`invalid_token` / `pending_token`) → STOP and ask the user explicitly** before running the Setup flow. Re-authentication requires physical access to the Freebox LCD — never do it automatically.
+
+---
+
 ## Setup (One-Time Authorization)
+
+> ⚠️ **This flow requires physical access to the Freebox LCD screen. Only run it when:**
+> 1. No valid `freebox-app-token` exists in keychain **AND** the user has confirmed they can physically approve on the LCD, **or**
+> 2. The user explicitly instructs you to re-authenticate.
+>
+> **Never run this flow automatically as a fallback.** If the stored token is invalid, stop and ask the user first.
 
 Before using the API, your app must be authorized on the Freebox. This requires physical access to the Freebox LCD screen.
 
@@ -271,9 +296,9 @@ bash ~/.agents/skills/freebox/scripts/call.sh GET /downloads/
 
 ## Session Lifecycle
 
-- **Session tokens expire** after a period of inactivity — if you get `auth_required` errors, re-run the login script
+- **Session tokens expire** after a period of inactivity — if you get `auth_required` errors, run `verify.sh` then `login.sh` (both use the stored keychain token only; the LCD is never needed). `call.sh` also refreshes the session automatically in this case.
 - **App tokens persist** unless the user revokes them from FreeboxOS or resets the admin password
-- **Re-authorization** with the same `app_id` replaces the old token (old one becomes invalid)
+- **Never re-authenticate automatically.** Re-authorization with the same `app_id` replaces the old token and **requires physical access to the Freebox LCD**. Only do it after explicit user confirmation.
 
 ### Logout
 
@@ -300,6 +325,8 @@ curl -sk -X POST "$FBX_BASE/login/logout/" \
 | `new_apps_denied` | New app token requests disabled on Freebox |
 | `apps_denied` | API access from apps disabled |
 | `internal_error` | Internal Freebox error |
+
+> **On `invalid_token` / `pending_token`**: the stored app token is unusable. **STOP — do not run the authorize flow.** Report to the user; re-authentication is only possible from the local network with physical access to the Freebox LCD.
 
 ---
 
