@@ -152,7 +152,7 @@ BUILTIN_PATTERNS = [
         "regex": r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
         "fp_domains": ["@example.com", "@domain.com", "@test.com", "@example.org", "@acm.org"],
         "fp_contains": ["user@", "your@", "test@", "email@", "you@"],
-        "fp_domains_app": ["@nono-rent.fr", "@tourisfair.de", "@plania.io", "@upgrade-code.org"],
+        "fp_domains_app": ["@nono-rent.fr", "@tourisfair.de", "@plania.io", "@chain-it.com"],
     },
     {
         "name": "phone_tunisia",

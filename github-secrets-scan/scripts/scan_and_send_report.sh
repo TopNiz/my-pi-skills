@@ -14,7 +14,7 @@ SEND_SCRIPT="$SKILL_DIR/scripts/send_email_report.py"
 CONFIG="$SKILL_DIR/scripts/config.json"
 
 # Recipient (can be changed)
-TO_EMAIL="nizar.ayed@upgrade-code.org"
+TO_EMAIL="nizar.ayed@chain-it.com"
 
 TIMESTAMP=$(date "+%Y-%m-%d_%H-%M-%S")
 DATE_HUMAN=$(date "+%d/%m/%Y à %H:%M")

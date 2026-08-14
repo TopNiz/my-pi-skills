@@ -14,7 +14,7 @@ from email.utils import formatdate
 # ── Configuration ──
 SMTP_SERVER = "imap.gmail.com"  # We'll use smtp.gmail.com below
 SMTP_PORT = 587
-FROM_EMAIL = "nizar.ayed@upgrade-code.org"
+FROM_EMAIL = "nizar.ayed@chain-it.com"
 KEYCHAIN_SERVICE = "email-manager"
 
 
