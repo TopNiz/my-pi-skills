@@ -14,7 +14,7 @@ Describe images using pi's vision model support. Each image produces a Markdown 
 ./describe-image.sh photo.png screenshot.jpg
 
 # Custom provider and model
-./describe-image.sh --provider openai-codex --model gpt-5.4 diagram.png
+./describe-image.sh --provider openai-codex --model gpt-5.4-mini diagram.png
 
 # Custom output directory
 ./describe-image.sh --output-dir ./descriptions image.png
@@ -24,5 +24,5 @@ Each image generates a `<name>_description.md` file next to it (or in `--output-
 
 ## Requirements
 
-- pi installed and authenticated with a provider that supports vision
+- pi installed and authenticated with a provider that supports vision (default: openai-codex / gpt-5.4-mini)
 - The provider/model must accept image inputs

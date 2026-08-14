@@ -10,8 +10,9 @@
 set -euo pipefail
 
 # Defaults
-PROVIDER="openai"
-MODEL="gpt-4.1-mini"
+PROVIDER="openai-codex"
+MODEL="gpt-5.4-mini"
+THINKING="minimal"
 OUTPUT_DIR=""
 
 # Parse flags before positional args
@@ -26,21 +27,26 @@ while [[ $# -gt 0 ]]; do
       MODEL="$2"
       shift 2
       ;;
+    --thinking)
+      THINKING="$2"
+      shift 2
+      ;;
     --output-dir)
       OUTPUT_DIR="$2"
       shift 2
       ;;
     -h|--help)
-      echo "Usage: $0 [--provider <provider>] [--model <model>] [--output-dir <dir>] <image1.png> [image2.png ...]"
+      echo "Usage: $0 [--provider <provider>] [--model <model>] [--thinking <level>] [--output-dir <dir>] <image1.png> [image2.png ...]"
       echo ""
       echo "Options:"
-      echo "  --provider <name>   pi provider to use (default: openai)"
-      echo "  --model <id>        vision model to use (default: gpt-4.1-mini)"
+      echo "  --provider <name>   pi provider to use (default: openai-codex)"
+      echo "  --model <id>        vision model to use (default: gpt-5.4-mini)"
+      echo "  --thinking <level>  reasoning level: off|minimal|low|medium|high|xhigh|max (default: minimal)"
       echo "  --output-dir <dir>  where to write description files (default: same dir as each image)"
       echo ""
       echo "Examples:"
       echo "  $0 image.png"
-      echo "  $0 --provider openai-codex --model gpt-5.4 image_01.png image_02.png"
+      echo "  $0 --provider openai-codex --model gpt-5.6-luna image_01.png image_02.png"
       echo "  $0 --output-dir ./descriptions *.png"
       exit 0
       ;;
@@ -55,7 +61,7 @@ set -- "${POSITIONAL[@]}"
 
 if [ $# -eq 0 ]; then
   echo "❌ Error: at least one image file is required."
-  echo "Usage: $0 [--provider <provider>] [--model <model>] [--output-dir <dir>] <image1.png> [image2.png ...]"
+  echo "Usage: $0 [--provider <provider>] [--model <model>] [--thinking <level>] [--output-dir <dir>] <image1.png> [image2.png ...]"
   exit 1
 fi
 
@@ -96,8 +102,8 @@ for IMAGE in "$@"; do
   echo "📷  Processing: $BASENAME"
   echo "   → Output: $OUTPUT_FILE"
 
-  # Call pi with the vision model (timeout after 120s)
-  if ! $PI_CMD --provider "$PROVIDER" --model "$MODEL" --print -p "$DESCRIBE_PROMPT" "$IMAGE" > "$OUTPUT_FILE" 2>/dev/null; then
+  # Call pi with the vision model
+  if ! $PI_CMD --provider "$PROVIDER" --model "$MODEL" --thinking "$THINKING" --print -p "$DESCRIBE_PROMPT" "$IMAGE" > "$OUTPUT_FILE" 2>/dev/null; then
     echo "⚠️   Failed to describe $BASENAME. Check provider/model availability."
     rm -f "$OUTPUT_FILE"
     continue
