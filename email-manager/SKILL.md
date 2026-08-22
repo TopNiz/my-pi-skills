@@ -35,13 +35,21 @@ No passwords are stored or needed.
 3. **Enable the Gmail API**: APIs & Services → Library → Search "Gmail API" → Enable
 4. **Create OAuth credentials**: APIs & Services → Credentials → Create Credentials → OAuth client ID
    - Application type: **Desktop app** → Name: `pi-email-manager`
-5. **Download the JSON** → save it as `credentials.gmail.json` in:
+5. **Download the JSON** as a temporary local file named `credentials.gmail.json` in:
 
 ```bash
 ~/.agents/skills/email-manager/credentials.gmail.json
 ```
 
-6. **OAuth consent screen**: If needed, set to "External" and add your email as a test user
+6. Import it into the native OS credential store and remove the temporary file:
+
+```bash
+cd ~/.agents/skills/email-manager
+python3 -m pip install --target .deps -r requirements-keyring.txt
+python3 scripts/auth.py --migrate
+```
+
+7. **OAuth consent screen**: If needed, set to "External" and add your email as a test user
 
 ### 2. Authenticate
 
@@ -50,7 +58,7 @@ cd ~/.agents/skills/email-manager
 python3 scripts/auth.py
 ```
 
-This opens your browser → click "Allow" → token saved to `token.gmail.json`. Done.
+This opens your browser → click "Allow" → the refresh token is stored in macOS Keychain or Linux Secret Service/GNOME Keyring. No OAuth token file is retained. Done.
 
 ### 3. Verify auth
 
@@ -538,15 +546,15 @@ print(f'Reste INBOX: {remaining}')
 - ❌ **Don't use `datetime.strptime` for email dates** — always use `parsedate_to_datetime`
 - ❌ **Don't unsubscribe if sender is in `protected_senders`**
 - ❌ **Don't use IMAP-specific folder names with Gmail API** — Gmail uses label IDs, not folder paths
-- ❌ **Don't store OAuth tokens in config files** — `token.gmail.json` is auto-managed
+- ❌ **Don't store OAuth tokens in config files or token files** — use the native credential store
 
 ---
 
 ## 🔐 Security Notes
 
 - **OAuth2** — No passwords stored. Authentication is via Google's OAuth2 flow.
-- **credentials.gmail.json** — Your OAuth client credentials (download from Google Cloud Console). Do not commit.
-- **token.gmail.json** — Auto-generated access + refresh token. Never share or commit. Auto-refreshes.
+- **Native credential store** — OAuth client configuration and refresh tokens are stored in macOS Keychain or Linux Secret Service/GNOME Keyring, never committed or printed.
+- **Temporary migration files** — `credentials.gmail.json` and `token.gmail.json` are imported with `auth.py --migrate` and removed only after successful native-store writes.
 - **Revoke access** at https://myaccount.google.com/permissions anytime.
 - **Invoice storage**: Ensure the invoice directory has appropriate backups.
 - **Scope**: `gmail.modify` — required for reading, deleting, and moving emails.
@@ -556,11 +564,10 @@ print(f'Reste INBOX: {remaining}')
 ```
 email-manager/
 ├── SKILL.md                    ← This file — skill instructions
-├── credentials.gmail.json      ← OAuth2 client ID/secret (from Google Cloud Console, git-ignored)
-├── token.gmail.json            ← OAuth2 token (auto-generated, git-ignored)
+├── requirements-keyring.txt    ← Native credential-store dependency
 ├── scripts/
 │   ├── config.json             ← Account config (no passwords!)
-│   ├── auth.py                 ← Gmail API OAuth2 authentication
+│   ├── auth.py                 ← Gmail OAuth2 via the native credential store
 │   ├── fetch_emails.py         ← Gmail API email fetcher → JSON
 │   ├── extract_invoices.py     ← Invoice detection & metadata
 │   └── setup.sh                ← One-time interactive setup (legacy)
@@ -580,6 +587,6 @@ email-manager/
 | Move | `COPY` → `STORE +FLAGS (\Deleted)` → expunge | `messages().modify()` → add/remove labelIds |
 | Attachments | Inline in IMAP fetch | `messages().get()` with `format=full` |
 | Rate limits | ~1500 connections/day | 250 quota units/user/sec (generous) |
-| Auth storage | macOS Keychain | `token.gmail.json` (OAuth2) |
+| Auth storage | macOS Keychain | Native credential store (OAuth2) |
 
 > **Note:** The `_gmail_labels` and `thread_id` fields are added to each email in the JSON output for use in Gmail API operations (delete, move, etc.).

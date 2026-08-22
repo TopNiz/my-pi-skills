@@ -8,6 +8,7 @@
 **/token.gmail.json
 **/user_preferences.json
 **/__pycache__/
+**/.deps/
 **/.playwright-cli/
 *.pyc
 *.pyo
