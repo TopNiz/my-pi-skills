@@ -1,4 +1,4 @@
 # Native credential-store support for Gmail OAuth2.
-# macOS: Keychain backend. Linux: Secret Service / GNOME Keyring backend.
-keyring>=25.0
-secretstorage>=3.3; sys_platform == "linux"
+# macOS uses Python keyring with the Keychain backend.
+# Fedora/Linux uses the installed Secret Service CLI (secret-tool).
+keyring>=25.0; sys_platform == "darwin"

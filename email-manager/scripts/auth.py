@@ -1,30 +1,36 @@
 #!/usr/bin/env python3
-"""Gmail API OAuth2 credentials stored only in the native OS keyring.
+"""Gmail API OAuth2 credentials stored only in native OS credential stores.
 
 Run ``python3 scripts/auth.py --migrate`` once to import existing local OAuth
-files into the keyring. The migration deletes those files only after both
-Keychain/Secret Service writes succeed.
+files into the native store. The migration deletes those files only after both
+credential-store writes succeed.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
 DEPENDENCY_DIR = SKILL_DIR / ".deps"
-if DEPENDENCY_DIR.is_dir():
+KEYRING_SERVICE = "pi-email-manager.gmail-oauth"
+CLIENT_ACCOUNT = "client-config"
+TOKEN_ACCOUNT = "user-credentials"
+
+if sys.platform == "darwin" and DEPENDENCY_DIR.is_dir():
     sys.path.insert(0, str(DEPENDENCY_DIR))
 
-try:
-    import keyring
-    from keyring.errors import KeyringError
-except ImportError as error:  # pragma: no cover - environment setup error
-    raise SystemExit(
-        "Keyring support is unavailable. Install requirements-keyring.txt before using Gmail OAuth."
-    ) from error
+if sys.platform == "darwin":
+    try:
+        import keyring
+        from keyring.errors import KeyringError
+    except ImportError as error:  # pragma: no cover - environment setup error
+        raise SystemExit(
+            "Keychain support is unavailable. Install requirements-keyring.txt before using Gmail OAuth."
+        ) from error
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -34,27 +40,66 @@ from googleapiclient.discovery import build
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 LEGACY_CLIENT_FILE = SKILL_DIR / "credentials.gmail.json"
 LEGACY_TOKEN_FILE = SKILL_DIR / "token.gmail.json"
-KEYRING_SERVICE = "pi-email-manager.gmail-oauth"
-CLIENT_ACCOUNT = "client-config"
-TOKEN_ACCOUNT = "user-credentials"
 
 
 class CredentialStoreError(RuntimeError):
     """Raised when native credential storage cannot be accessed safely."""
 
 
-def _get_secret(account: str) -> str | None:
+def _secret_tool(*args: str, value: str | None = None) -> subprocess.CompletedProcess[str]:
     try:
-        return keyring.get_password(KEYRING_SERVICE, account)
-    except KeyringError as error:
+        return subprocess.run(
+            ["secret-tool", *args],
+            input=value,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=15,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
         raise CredentialStoreError("The native credential store is unavailable.") from error
+
+
+def _get_secret(account: str) -> str | None:
+    if sys.platform == "darwin":
+        try:
+            return keyring.get_password(KEYRING_SERVICE, account)
+        except KeyringError as error:
+            raise CredentialStoreError("The native credential store is unavailable.") from error
+
+    if sys.platform == "linux":
+        result = _secret_tool("lookup", "service", KEYRING_SERVICE, "account", account)
+        if result.returncode != 0:
+            return None
+        return result.stdout.removesuffix("\n")
+
+    raise CredentialStoreError("No supported native credential store is available.")
 
 
 def _set_secret(account: str, value: str) -> None:
-    try:
-        keyring.set_password(KEYRING_SERVICE, account, value)
-    except KeyringError as error:
-        raise CredentialStoreError("The native credential store is unavailable.") from error
+    if sys.platform == "darwin":
+        try:
+            keyring.set_password(KEYRING_SERVICE, account, value)
+        except KeyringError as error:
+            raise CredentialStoreError("The native credential store is unavailable.") from error
+        return
+
+    if sys.platform == "linux":
+        result = _secret_tool(
+            "store",
+            "--label=Pi Email Manager Gmail OAuth",
+            "service",
+            KEYRING_SERVICE,
+            "account",
+            account,
+            value=value,
+        )
+        if result.returncode != 0:
+            raise CredentialStoreError("The native credential store is unavailable.")
+        return
+
+    raise CredentialStoreError("No supported native credential store is available.")
 
 
 def _load_json_secret(account: str) -> dict:
@@ -89,7 +134,8 @@ def migrate_legacy_files() -> bool:
 
 def get_credentials() -> Credentials:
     """Return valid Gmail OAuth credentials sourced exclusively from the OS keyring."""
-    token_info = _load_json_secret(TOKEN_ACCOUNT) if _get_secret(TOKEN_ACCOUNT) else None
+    token_value = _get_secret(TOKEN_ACCOUNT)
+    token_info = json.loads(token_value) if token_value else None
     creds = Credentials.from_authorized_user_info(token_info, SCOPES) if token_info else None
 
     if not creds or not creds.valid:
