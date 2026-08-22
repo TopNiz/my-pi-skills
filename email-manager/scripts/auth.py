@@ -144,7 +144,9 @@ def get_credentials() -> Credentials:
         else:
             client_config = _load_json_secret(CLIENT_ACCOUNT)
             flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
-            creds = flow.run_local_server(port=0, open_browser=True)
+            callback_port = int(os.environ.get("PI_EMAIL_OAUTH_PORT", "0"))
+            open_browser = os.environ.get("PI_EMAIL_OAUTH_OPEN_BROWSER", "1") != "0"
+            creds = flow.run_local_server(port=callback_port, open_browser=open_browser)
         _set_secret(TOKEN_ACCOUNT, creds.to_json())
 
     return creds
