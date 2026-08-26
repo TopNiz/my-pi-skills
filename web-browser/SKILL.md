@@ -21,104 +21,89 @@ allowed-tools: Bash(playwright-cli:*) Bash(npx:*) Bash(npm:*)
 
 Before opening any browser session, determine whether the target is a scraping-averse site (see HARD RULE above): if yes → `--headed`; if the task would be headless → **ask the user for explicit confirmation first**.
 
-## Workspace-local persistent sessions
+## Mandatory workspace profile policy
 
-Before starting a new browser, always check whether the current workspace already has a local persistent Playwright session/profile to reuse. **Only touch sessions that clearly belong to the current workspace or that this agent/session created.** Do not attach to, modify, or close outside/ambiguous sessions.
+**Every workspace browser session must be profile-backed.** Never open an in-memory session, including `default`, `web-browser`, or a task-named session without `--profile`.
 
-### List local sessions and separate them from outside sessions
+Before opening, attaching to, or navigating a browser, inspect the existing sessions and workspace profiles:
 
 ```bash
-# 1) List all currently running playwright-cli sessions (may include other workspaces)
 playwright-cli list
-
-# 2) List current-workspace persistent profile names only
 find "$PWD/.playwright/profiles" -maxdepth 1 -mindepth 1 -type d -exec basename {} \; 2>/dev/null | sort
-
-# 3) Separate open sessions by ownership convention:
-#    workspace-owned = open session name matches a profile under $PWD/.playwright/profiles
-#    outside/ambiguous = every other open session; do not touch without explicit user confirmation
-OPEN_SESSIONS=$(playwright-cli list 2>/dev/null | awk '/^- /{gsub(":$","",$2); print $2}' | sort)
-LOCAL_PROFILES=$(find "$PWD/.playwright/profiles" -maxdepth 1 -mindepth 1 -type d -exec basename {} \; 2>/dev/null | sort)
-printf '%s\n' "Workspace-owned open sessions:"
-comm -12 <(printf '%s\n' "$OPEN_SESSIONS") <(printf '%s\n' "$LOCAL_PROFILES")
-printf '%s\n' "Outside or ambiguous open sessions (do not touch):"
-comm -23 <(printf '%s\n' "$OPEN_SESSIONS") <(printf '%s\n' "$LOCAL_PROFILES")
 ```
 
-### Reuse or open only workspace sessions
+Apply these rules, which override all generic session examples below:
+
+1. **Exactly one workspace profile exists:** use it exclusively. The session name **must equal** the profile directory basename. Reuse its open session if present; otherwise reopen it headed with that profile. Do not create another session or profile.
+2. **No workspace profile exists:** create one under `$PWD/.playwright/profiles/<session-name>` by opening a headed browser with `--profile`. Choose a stable, workspace-specific `<session-name>` and use that same name for the session and profile. This is the only case in which a new profile may be created.
+3. **More than one workspace profile exists:** do not guess or create another one; ask the user which profile to use.
+4. Treat sessions not backed by a profile in the current workspace, including in-memory sessions, as outside/ambiguous. Do not use, alter, or close them unless the user explicitly identifies them.
+
+Examples:
 
 ```bash
-# if a named workspace-owned session is already open, use it
-playwright-cli -s=<session-name> snapshot
+# One existing profile named "workspace-browser": reuse its same-named session
+playwright-cli -s=workspace-browser snapshot
 
-# if no session is open but a workspace profile exists, reopen it headed
-# common convention: .playwright/profiles/<session-name>
-playwright-cli -s=<session-name> open --headed --profile="$PWD/.playwright/profiles/<session-name>" https://example.com
+# If it is not open, reopen that exact profile headed
+playwright-cli -s=workspace-browser open --headed \
+  --profile="$PWD/.playwright/profiles/workspace-browser" https://example.com
 
-# if no workspace profile/session exists and a temporary session is needed,
-# create a clearly named task/workspace session instead of default when possible
-playwright-cli -s=web-browser open --headed https://example.com
+# With no profiles, create one stable workspace profile (not an in-memory session)
+playwright-cli -s=workspace-browser open --headed \
+  --profile="$PWD/.playwright/profiles/workspace-browser" https://example.com
 ```
 
-Rules:
-- Prefer an existing workspace-owned session over creating a new session.
-- Prefer workspace profiles under `.playwright/profiles/` for sites where the user is already authenticated.
-- Treat open sessions whose names do not match current-workspace profiles as outside/ambiguous; do not use or close them unless the user explicitly identifies them.
-- Prefer named sessions (`-s=<name>`) over `default`. If the CLI forces `default`, touch it only if this agent/session created it.
-- Use `--headed` when reopening persistent sessions so the user can interact with login/captcha/2FA if needed.
-- Never print saved storage-state, cookies, localStorage, or profile contents; they may contain secrets.
-- Only create a new browser/session when no suitable local session/profile exists.
+Never print saved storage-state, cookies, localStorage, or profile contents; they may contain secrets.
 
 ## Quick start
 
 ```bash
-# open a named browser session and go to a page (use --headed unless the user explicitly allowed headless)
-playwright-cli -s=web-browser open --headed https://example.com
+# With an existing profile, use its basename as the session name.
+playwright-cli -s=workspace-browser open --headed \
+  --profile="$PWD/.playwright/profiles/workspace-browser" https://example.com
 # take a snapshot to inspect the page structure
-playwright-cli -s=web-browser snapshot
+playwright-cli -s=workspace-browser snapshot
 # navigate to another page
-playwright-cli -s=web-browser goto https://other-page.com
-# close only the session you created when done
-playwright-cli -s=web-browser close
+playwright-cli -s=workspace-browser goto https://other-page.com
+# Close only when the user explicitly identifies this session and asks to close it.
+playwright-cli -s=workspace-browser close
 ```
 
 ## Typical browsing workflow
 
 ```bash
-# 1. Open and navigate using a named session owned by this task/workspace
-playwright-cli -s=web-browser open https://example.com
+# 1. Reuse the mandatory profile-backed workspace session.
+playwright-cli -s=workspace-browser snapshot
 
-# 2. Snapshot shows the page with element refs (e1, e2, …)
-playwright-cli -s=web-browser snapshot
+# 2. Interact — click, fill, scroll
+playwright-cli -s=workspace-browser click e5        # click element (use ref from snapshot)
+playwright-cli -s=workspace-browser fill e3 "text"  # fill input field
+playwright-cli -s=workspace-browser press Enter
 
-# 3. Interact — click, fill, scroll
-playwright-cli -s=web-browser click e5        # click element (use ref from snapshot)
-playwright-cli -s=web-browser fill e3 "text"  # fill input field
-playwright-cli -s=web-browser press Enter
+# 3. Check what's on the page now
+playwright-cli -s=workspace-browser --raw eval "() => document.body.innerText.slice(0, 3000)"
 
-# 4. Check what's on the page now
-playwright-cli -s=web-browser --raw eval "() => document.body.innerText.slice(0, 3000)"
+# 4. Navigate somewhere else
+playwright-cli -s=workspace-browser goto https://another-site.com
 
-# 5. Navigate somewhere else
-playwright-cli -s=web-browser goto https://another-site.com
-
-# 6. Close only this disposable session
-playwright-cli -s=web-browser close
+# 5. Close only when the user explicitly identifies this session and asks to close it.
+playwright-cli -s=workspace-browser close
 ```
 
 > **Tip**: Use `playwright-cli goto <url>` instead of `curl` for interactive browsing — it handles JS-rendered pages, forms, redirects, and dynamic content.
 
 ## Commands
 
-Unless the user explicitly identified a different workspace-owned session, scope commands with `-s=<session-name>` for the session you created or selected. Do not run unscoped commands when outside/ambiguous sessions exist.
+Scope every command with `-s=<profile-name>`, where `<profile-name>` is the selected workspace profile basename. Commands in the reference lists below that omit this flag are shorthand only and must not be run unscoped. Do not run unscoped commands when outside/ambiguous sessions exist.
 
 ### Core
 
 ```bash
-playwright-cli -s=<session-name> open
-# open and navigate right away
-playwright-cli -s=<session-name> open https://example.com/
-playwright-cli -s=<session-name> goto https://playwright.dev
+# Open only under the Mandatory workspace profile policy.
+playwright-cli -s=<profile-name> open --headed \
+  --profile="$PWD/.playwright/profiles/<profile-name>" https://example.com/
+playwright-cli -s=<profile-name> goto https://playwright.dev
 playwright-cli type "search query"
 playwright-cli click e3
 playwright-cli dblclick e7
@@ -263,7 +248,7 @@ playwright-cli --raw localstorage-get theme
 ```
 
 ## Open parameters
-> ⛔ **Reminder:** for any search/scraping/browsing task, open with `--headed`. Headless only after explicit user confirmation.
+> ⛔ **Reminder:** for any search/scraping/browsing task, open with `--headed`. Headless only after explicit user confirmation. The reference commands below are shorthand: every actual open must include `-s=<profile-name>` and `--profile="$PWD/.playwright/profiles/<profile-name>"` under the Mandatory workspace profile policy.
 ```bash
 # Use specific browser when creating session
 playwright-cli open --browser=chrome
@@ -285,8 +270,14 @@ playwright-cli attach --extension
 # Start with config file
 playwright-cli open --config=my-config.json
 
-# Close only the browser session you created or the user explicitly identified
-playwright-cli -s=<session-name> close
+> **💡 Remove the `--no-sandbox` infobar**: by default playwright-cli appends `--no-sandbox` to the Chrome command line, which makes Chrome show the warning *"You are using an unsupported command-line flag: --no-sandbox. Stability and security will suffer."* at the top of every page. To remove it, set `chromiumSandbox: true` in the config file — e.g. workspace `.playwright/cli.config.json`:
+> ```json
+> { "browser": { "launchOptions": { "chromiumSandbox": true } } }
+> ```
+> (doli-cli repo already ships this config; it is safe because it launches the properly-signed system Chrome, which supports sandboxing on macOS.)
+
+# Close only a profile-backed session the user explicitly identifies and asks to close.
+playwright-cli -s=<profile-name> close
 # Delete user data only for a session/profile you created or the user explicitly identified
 playwright-cli -s=<session-name> delete-data
 ```
@@ -348,33 +339,27 @@ playwright-cli click "getByTestId('submit-button')"
 
 ## Browser Sessions
 
+Follow the **Mandatory workspace profile policy** above. In particular, use the same stable name for the session and profile directory, and never create an in-memory fallback when a workspace profile exists.
+
 ```bash
-# first separate current-workspace sessions/profiles from outside/ambiguous sessions
+# Inspect first; a single existing profile is mandatory to reuse.
 playwright-cli list
 find "$PWD/.playwright/profiles" -maxdepth 1 -mindepth 1 -type d -exec basename {} \; 2>/dev/null | sort
 
-OPEN_SESSIONS=$(playwright-cli list 2>/dev/null | awk '/^- /{gsub(":$","",$2); print $2}' | sort)
-LOCAL_PROFILES=$(find "$PWD/.playwright/profiles" -maxdepth 1 -mindepth 1 -type d -exec basename {} \; 2>/dev/null | sort)
-printf '%s\n' "Workspace-owned open sessions:"
-comm -12 <(printf '%s\n' "$OPEN_SESSIONS") <(printf '%s\n' "$LOCAL_PROFILES")
-printf '%s\n' "Outside or ambiguous open sessions (do not touch):"
-comm -23 <(printf '%s\n' "$OPEN_SESSIONS") <(printf '%s\n' "$LOCAL_PROFILES")
+# Reopen the existing profile named "workspace-browser" if its session is closed.
+playwright-cli -s=workspace-browser open --headed \
+  --profile="$PWD/.playwright/profiles/workspace-browser" https://example.com
 
-# reuse an existing workspace profile as a named, headed session
-playwright-cli -s=mysession open --headed --profile="$PWD/.playwright/profiles/mysession" https://example.com
+# Only when the profiles directory is empty, create this persistent profile/session pair.
+playwright-cli -s=workspace-browser open --headed \
+  --profile="$PWD/.playwright/profiles/workspace-browser" https://example.com
 
-# create a new named browser session only when no suitable workspace session/profile exists
-playwright-cli -s=mysession open example.com --persistent
-# same with a manually specified profile directory, only when requested explicitly
-playwright-cli -s=mysession open example.com --profile="$PWD/.playwright/profiles/mysession"
-playwright-cli -s=mysession click e6
-playwright-cli -s=mysession close  # stop only this named browser if you created it or the user identified it
-playwright-cli -s=mysession delete-data  # only for a profile/session you created or the user identified
-
-playwright-cli list
-# Do NOT use close-all or kill-all unless the user explicitly requests it and confirms every affected session belongs to this task/workspace.
-# Never close/kill outside or ambiguous sessions.
+playwright-cli -s=workspace-browser click e6
+playwright-cli -s=workspace-browser close  # only when the user explicitly identifies it and asks to close it
+playwright-cli -s=workspace-browser delete-data  # only with explicit user consent
 ```
+
+Do not use `close-all` or `kill-all`. Never close/kill outside or ambiguous sessions.
 
 ## Installation
 
@@ -393,45 +378,47 @@ npm install -g @playwright/cli@latest
 ## Example: Form submission
 
 ```bash
-playwright-cli -s=web-browser open https://example.com/form
-playwright-cli -s=web-browser snapshot
+playwright-cli -s=workspace-browser open --headed \
+  --profile="$PWD/.playwright/profiles/workspace-browser" https://example.com/form
+playwright-cli -s=workspace-browser snapshot
 
-playwright-cli -s=web-browser fill e1 "user@example.com"
-playwright-cli -s=web-browser fill e2 "password123"
-playwright-cli -s=web-browser click e3
-playwright-cli -s=web-browser snapshot
-playwright-cli -s=web-browser close
+playwright-cli -s=workspace-browser fill e1 "user@example.com"
+playwright-cli -s=workspace-browser fill e2 "password123"
+playwright-cli -s=workspace-browser click e3
+playwright-cli -s=workspace-browser snapshot
+# Leave the persistent workspace session open unless the user explicitly asks to close it.
 ```
 
 ## Example: Multi-tab workflow
 
 ```bash
-playwright-cli -s=web-browser open https://example.com
-playwright-cli -s=web-browser tab-new https://example.com/other
-playwright-cli -s=web-browser tab-list
-playwright-cli -s=web-browser tab-select 0
-playwright-cli -s=web-browser snapshot
-playwright-cli -s=web-browser close
+playwright-cli -s=workspace-browser open --headed \
+  --profile="$PWD/.playwright/profiles/workspace-browser" https://example.com
+playwright-cli -s=workspace-browser tab-new https://example.com/other
+playwright-cli -s=workspace-browser tab-list
+playwright-cli -s=workspace-browser tab-select 0
+playwright-cli -s=workspace-browser snapshot
+# Leave the persistent workspace session open unless the user explicitly asks to close it.
 ```
 
 ## Example: Debugging with DevTools
 
 ```bash
-playwright-cli -s=web-browser open https://example.com
-playwright-cli -s=web-browser click e4
-playwright-cli -s=web-browser fill e7 "test"
-playwright-cli -s=web-browser console
-playwright-cli -s=web-browser network
-playwright-cli -s=web-browser close
+playwright-cli -s=workspace-browser open --headed \
+  --profile="$PWD/.playwright/profiles/workspace-browser" https://example.com
+playwright-cli -s=workspace-browser click e4
+playwright-cli -s=workspace-browser fill e7 "test"
+playwright-cli -s=workspace-browser console
+playwright-cli -s=workspace-browser network
+# Leave the persistent workspace session open unless the user explicitly asks to close it.
 ```
 
 ```bash
-playwright-cli -s=web-browser open https://example.com
-playwright-cli -s=web-browser tracing-start
-playwright-cli -s=web-browser click e4
-playwright-cli -s=web-browser fill e7 "test"
-playwright-cli -s=web-browser tracing-stop
-playwright-cli -s=web-browser close
+playwright-cli -s=workspace-browser tracing-start
+playwright-cli -s=workspace-browser click e4
+playwright-cli -s=workspace-browser fill e7 "test"
+playwright-cli -s=workspace-browser tracing-stop
+# Leave the persistent workspace session open unless the user explicitly asks to close it.
 ```
 
 ## Specific tasks

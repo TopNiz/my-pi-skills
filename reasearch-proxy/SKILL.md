@@ -14,6 +14,17 @@ Université de Lorraine uses a `bases-doc.univ-lorraine.fr` proxy / EZproxy-styl
 
 Never ask for or display the user's university password. Let the user authenticate manually in the headed browser window.
 
+## Mandatory workspace browser profile
+
+Before opening or using Playwright, inspect `playwright-cli list` and the directories under `$PWD/.playwright/profiles`.
+
+- **Exactly one profile:** use it exclusively. Its directory basename must also be the Playwright session name. Reuse its profile-backed session if open, or reopen it headed with `--profile="$PWD/.playwright/profiles/<profile-name>"`.
+- **No profile:** create the first persistent workspace profile by opening headed with `--profile="$PWD/.playwright/profiles/<session-name>"`; use the same stable, workspace-specific name for the session and directory.
+- **More than one profile:** ask the user which to use; never guess or create another profile.
+- Never use `default`, an in-memory session, or a task-named session without `--profile`. Treat sessions not backed by the current workspace profile directory as outside/ambiguous; do not use, modify, or close them without explicit user identification.
+
+Every `playwright-cli` command below must be scoped as `-s=<profile-name>`, where `<profile-name>` is the selected profile basename. Leave the persistent session open unless the user explicitly asks to close that identified session.
+
 ## Important URLs and patterns
 
 ### Official proxy entrypoint
@@ -67,7 +78,9 @@ UL also documents a generic HTTP proxy (`proxy.infra.univ-lorraine.fr:3128`, PAC
 1. Open a headed browser:
 
 ```bash
-playwright-cli open "http://bases-doc.univ-lorraine.fr/login?url=<encoded-url>" --headed
+playwright-cli -s=<profile-name> open --headed \
+  --profile="$PWD/.playwright/profiles/<profile-name>" \
+  "http://bases-doc.univ-lorraine.fr/login?url=<encoded-url>"
 ```
 
 2. If redirected to CAS (`auth.univ-lorraine.fr`), stop and ask the user to log in manually.
@@ -75,7 +88,7 @@ playwright-cli open "http://bases-doc.univ-lorraine.fr/login?url=<encoded-url>" 
 3. After the user says they are logged in, inspect the current page:
 
 ```bash
-playwright-cli --raw eval "() => ({url: location.href, title: document.title, text: document.body.innerText.slice(0, 1000)})"
+playwright-cli -s=<profile-name> --raw eval "() => ({url: location.href, title: document.title, text: document.body.innerText.slice(0, 1000)})"
 ```
 
 4. If authentication lands on the UL resource menu rather than the target article, navigate manually to the proxied article URL using the host-suffix pattern.
@@ -83,7 +96,7 @@ playwright-cli --raw eval "() => ({url: location.href, title: document.title, te
 Example for ScienceDirect:
 
 ```bash
-playwright-cli goto "http://www.sciencedirect.com.bases-doc.univ-lorraine.fr/science/article/pii/<PII>"
+playwright-cli -s=<profile-name> goto "http://www.sciencedirect.com.bases-doc.univ-lorraine.fr/science/article/pii/<PII>"
 ```
 
 ## ScienceDirect article workflow
@@ -91,25 +104,25 @@ playwright-cli goto "http://www.sciencedirect.com.bases-doc.univ-lorraine.fr/sci
 1. Navigate to the proxied article page:
 
 ```bash
-playwright-cli goto "http://www.sciencedirect.com.bases-doc.univ-lorraine.fr/science/article/pii/<PII>"
+playwright-cli -s=<profile-name> goto "http://www.sciencedirect.com.bases-doc.univ-lorraine.fr/science/article/pii/<PII>"
 ```
 
 2. Verify the article page loaded:
 
 ```bash
-playwright-cli --raw eval "() => ({url: location.href, title: document.title})"
+playwright-cli -s=<profile-name> --raw eval "() => ({url: location.href, title: document.title})"
 ```
 
 3. Find the primary PDF link:
 
 ```bash
-playwright-cli --raw eval "() => [...document.querySelectorAll('a,button')].map((el,i)=>({i,tag:el.tagName,text:el.innerText?.trim().slice(0,100), href:el.href || '', aria:el.getAttribute('aria-label') || '', title:el.getAttribute('title') || ''})).filter(x=>/pdf|download|full/i.test([x.text,x.href,x.aria,x.title].join(' '))).slice(0,20)"
+playwright-cli -s=<profile-name> --raw eval "() => [...document.querySelectorAll('a,button')].map((el,i)=>({i,tag:el.tagName,text:el.innerText?.trim().slice(0,100), href:el.href || '', aria:el.getAttribute('aria-label') || '', title:el.getAttribute('title') || ''})).filter(x=>/pdf|download|full/i.test([x.text,x.href,x.aria,x.title].join(' '))).slice(0,20)"
 ```
 
 4. Click the first article-level PDF link:
 
 ```bash
-playwright-cli click 'a[href*="/pdfft"] >> nth=0'
+playwright-cli -s=<profile-name> click 'a[href*="/pdfft"] >> nth=0'
 ```
 
 This usually opens a new tab displaying the PDF in Chrome's PDF viewer.
@@ -123,20 +136,20 @@ Use the viewer's download button and capture Playwright's `download` event.
 1. Select the PDF tab:
 
 ```bash
-playwright-cli tab-list
-playwright-cli tab-select <pdf-tab-index>
+playwright-cli -s=<profile-name> tab-list
+playwright-cli -s=<profile-name> tab-select <pdf-tab-index>
 ```
 
 2. Take a screenshot if needed to locate the download icon in the toolbar:
 
 ```bash
-playwright-cli screenshot --filename=.playwright-cli/pdf-viewer.png
+playwright-cli -s=<profile-name> screenshot --filename=.playwright-cli/pdf-viewer.png
 ```
 
 3. Trigger the viewer download button and save the real PDF:
 
 ```bash
-playwright-cli --raw run-code "async page => { const out = '902-academic/article-main.pdf'; const downloadPromise = page.waitForEvent('download', { timeout: 20000 }); await page.mouse.click(1095, 28); const download = await downloadPromise; await download.saveAs(out); return {saved: out, suggested: download.suggestedFilename()}; }"
+playwright-cli -s=<profile-name> --raw run-code "async page => { const out = '902-academic/article-main.pdf'; const downloadPromise = page.waitForEvent('download', { timeout: 20000 }); await page.mouse.click(1095, 28); const download = await downloadPromise; await download.saveAs(out); return {saved: out, suggested: download.suggestedFilename()}; }"
 ```
 
 4. Verify the output:

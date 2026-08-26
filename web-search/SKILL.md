@@ -8,56 +8,42 @@ allowed-tools: Bash(playwright-cli:*) Bash(npx:*)
 
 ## Golden Rules
 
-1. **Use only workspace-local sessions.** Before starting a browser, list and separate workspace-owned sessions/profiles from outside or ambiguous sessions (see Step 0). Reuse only a suitable workspace session/profile; do not attach to, modify, or close sessions that do not clearly belong to the current workspace.
+1. **Use the mandatory workspace profile.** Before starting a browser, inspect `$PWD/.playwright/profiles` and `playwright-cli list` (see Step 0). If exactly one workspace profile exists, reuse it exclusively with a session of the same name. If none exists, create one profile-backed headed session under `$PWD/.playwright/profiles/<session-name>`, with the session and directory using the same stable workspace-specific name. If multiple profiles exist, ask the user to choose. Never use or create an in-memory session (`default`, `web-search`, or task-named) and do not touch outside/ambiguous sessions.
 2. **`--headed` MANDATORY for search/scraping — headless only with explicit user confirmation.** Always open the browser in headed mode: DuckDuckGo, Bing, Google, and most scraping-averse sites (Cloudflare-protected, LinkedIn, OpenAI Help Center, EZproxy/ProQuest, ScienceDirect, captcha-walled pages…) block headless browsers aggressively. If headless seems necessary or is requested, **ask the user first and wait for a clear affirmative answer** — never run headless silently. Detection signals: "Just a moment...", HTTP 403, "Enable JavaScript and cookies to continue", captcha text, login walls, rate-limit pages.
 3. **One step at a time.** Execute ONE action, inspect the result, then decide what to do next. Never batch multiple steps in a single bash command or playwright eval.
 4. **Check after every step.** After opening a page: verify it loaded. After filling a form: verify the field has the right value. After clicking: verify the page changed. After extracting results: verify they're meaningful.
 5. **If results are unexpected, STOP and investigate.** Don't blindly continue. Check the page content, check for captchas, check if selectors still match.
 6. **If stuck after 2-3 attempts, ask the user.** They can see the headed browser window and help resolve captchas, selectors, or site-specific issues.
-7. **Close only sessions you created.** Close ad-hoc search sessions only if this agent/session created them. Do not close user-requested persistent workspace sessions or any outside/ambiguous sessions unless the user explicitly identifies them.
+7. **Preserve the workspace session.** Leave the selected persistent workspace session open. Close it only when the user explicitly identifies that session and asks to close it; never close outside/ambiguous sessions.
+
+> **💡 Remove the `--no-sandbox` infobar**: by default playwright-cli appends `--no-sandbox` to the Chrome command line, which makes Chrome show the warning *"You are using an unsupported command-line flag: --no-sandbox. Stability and security will suffer."* at the top of every page. To remove it, set `browser.launchOptions.chromiumSandbox: true` in the config file — e.g. workspace `.playwright/cli.config.json`: `{ "browser": { "launchOptions": { "chromiumSandbox": true } } }`. The doli-cli repo already ships this config.
 
 ---
 
 ## Step-by-Step Workflow
 
-### Step 0 — Identify workspace-local sessions; ignore outside sessions
+### Step 0 — Select the mandatory workspace profile
 
-Always separate current-workspace sessions/profiles from outside or ambiguous sessions before opening, attaching to, or closing anything.
+Before opening, attaching to, navigating, or closing a browser, inspect sessions and persistent profiles:
 
 ```bash
-# 1) List all currently running playwright-cli sessions (may include other workspaces)
 playwright-cli list
-
-# 2) List current-workspace persistent profile names only
 find "$PWD/.playwright/profiles" -maxdepth 1 -mindepth 1 -type d -exec basename {} \; 2>/dev/null | sort
-
-# 3) Separate open sessions by ownership convention:
-#    workspace-owned = open session name matches a profile under $PWD/.playwright/profiles
-#    outside/ambiguous = every other open session; do not touch without explicit user confirmation
-OPEN_SESSIONS=$(playwright-cli list 2>/dev/null | awk '/^- /{gsub(":$","",$2); print $2}' | sort)
-LOCAL_PROFILES=$(find "$PWD/.playwright/profiles" -maxdepth 1 -mindepth 1 -type d -exec basename {} \; 2>/dev/null | sort)
-printf '%s\n' "Workspace-owned open sessions:"
-comm -12 <(printf '%s\n' "$OPEN_SESSIONS") <(printf '%s\n' "$LOCAL_PROFILES")
-printf '%s\n' "Outside or ambiguous open sessions (do not touch):"
-comm -23 <(printf '%s\n' "$OPEN_SESSIONS") <(printf '%s\n' "$LOCAL_PROFILES")
 ```
 
-If a suitable workspace-owned named session is open, use it:
+- **One profile:** it is mandatory. Its basename is the session name. Reuse that named open session if it is profile-backed; otherwise reopen it headed.
+- **No profiles:** create the first persistent workspace profile. Choose one stable, workspace-specific name, then use it for both the session and profile directory.
+- **Multiple profiles:** stop and ask the user which one to use.
+- Any in-memory session or session not backed by `$PWD/.playwright/profiles` is outside/ambiguous: do not use, modify, or close it without explicit user identification.
 
 ```bash
-playwright-cli -s=<session-name> snapshot
-```
+# Reuse/open a single existing profile named "workspace-browser".
+playwright-cli -s=workspace-browser open --headed \
+  --profile="$PWD/.playwright/profiles/workspace-browser" "https://lite.duckduckgo.com/lite/"
 
-If a suitable workspace profile exists but is not open, reopen it headed using the matching session name:
-
-```bash
-playwright-cli -s=<session-name> open --headed --profile="$PWD/.playwright/profiles/<session-name>" "https://lite.duckduckgo.com/lite/"
-```
-
-If no workspace profile/session exists and a temporary session is needed, create a clearly named workspace session instead of `default` when possible:
-
-```bash
-playwright-cli -s=web-search open --headed "https://lite.duckduckgo.com/lite/"
+# Only if no profile exists, create this persistent session/profile pair.
+playwright-cli -s=workspace-browser open --headed \
+  --profile="$PWD/.playwright/profiles/workspace-browser" "https://lite.duckduckgo.com/lite/"
 ```
 
 Never print saved cookies, storage-state, localStorage, or profile contents.
@@ -66,20 +52,21 @@ Never print saved cookies, storage-state, localStorage, or profile contents.
 
 > ⛔ **HARD RULE:** `--headed` is mandatory for search/scraping. Headless only after the user explicitly confirms it. If in doubt → ask the user first.
 
-Only do this if no suitable workspace session/profile exists. Prefer a clearly named session for this workspace/task.
+Only do this after Step 0 selected the mandatory profile. Use its basename as the session name and pass its workspace-local path explicitly:
 
 ```bash
-playwright-cli -s=web-search open "https://lite.duckduckgo.com/lite/" --headed
+playwright-cli -s=<profile-name> open --headed \
+  --profile="$PWD/.playwright/profiles/<profile-name>" "https://lite.duckduckgo.com/lite/"
 ```
 
-If the CLI forces `default`, treat it as disposable only if this agent/session created it. Do not reuse or close an existing `default` session unless you created it or the user explicitly confirms it is yours.
+Do not use `default`, `web-search`, or any other in-memory fallback.
 
 **Check:** The command outputs that the chosen browser session opened. If it shows an error, stop and investigate.
 
 ### Step 2 — Inspect the page
 
 ```bash
-playwright-cli --raw eval "() => document.body.innerText.slice(0, 1000)"
+playwright-cli -s=<profile-name> --raw eval "() => document.body.innerText.slice(0, 1000)"
 ```
 
 **Check for:**
@@ -92,7 +79,7 @@ playwright-cli --raw eval "() => document.body.innerText.slice(0, 1000)"
 ### Step 3 — Find the search field
 
 ```bash
-playwright-cli --raw eval "() => [...document.querySelectorAll('input, textarea, select')].map(el => ({tag: el.tagName, id: el.id, name: el.name, type: el.type, placeholder: el.placeholder, className: el.className}))"
+playwright-cli -s=<profile-name> --raw eval "() => [...document.querySelectorAll('input, textarea, select')].map(el => ({tag: el.tagName, id: el.id, name: el.name, type: el.type, placeholder: el.placeholder, className: el.className}))"
 ```
 
 **Check:** Verify the search input field is found (e.g. `name="q"`). If no fields found, inspect the page HTML instead.
@@ -100,7 +87,7 @@ playwright-cli --raw eval "() => [...document.querySelectorAll('input, textarea,
 ### Step 4 — Fill the search query
 
 ```bash
-playwright-cli fill 'input[name="q"]' "your search query here"
+playwright-cli -s=<profile-name> fill 'input[name="q"]' "your search query here"
 ```
 
 **Check:** No errors means the field was found and filled.
@@ -108,7 +95,7 @@ playwright-cli fill 'input[name="q"]' "your search query here"
 ### Step 5 — Submit
 
 ```bash
-playwright-cli click 'input[type="submit"]'
+playwright-cli -s=<profile-name> click 'input[type="submit"]'
 ```
 
 **Check:** The page title should now include your search query. Wait 2-3 seconds for results.
@@ -117,7 +104,7 @@ playwright-cli click 'input[type="submit"]'
 
 ```bash
 sleep 3
-playwright-cli --raw eval "() => document.body.innerText.slice(0, 1000)"
+playwright-cli -s=<profile-name> --raw eval "() => document.body.innerText.slice(0, 1000)"
 ```
 
 **Check:**
@@ -129,7 +116,7 @@ playwright-cli --raw eval "() => document.body.innerText.slice(0, 1000)"
 ### Step 7 — Extract results
 
 ```bash
-playwright-cli --raw eval "() => [...document.querySelectorAll('a')].filter(a => a.href?.startsWith('http') && !a.href.includes('duckduckgo.com')).slice(0,10).map(a => ({text: a.textContent?.trim(), href: a.href}))"
+playwright-cli -s=<profile-name> --raw eval "() => [...document.querySelectorAll('a')].filter(a => a.href?.startsWith('http') && !a.href.includes('duckduckgo.com')).slice(0,10).map(a => ({text: a.textContent?.trim(), href: a.href}))"
 ```
 
 **Check:**
@@ -139,15 +126,15 @@ playwright-cli --raw eval "() => [...document.querySelectorAll('a')].filter(a =>
 
 **If results are empty:** Check the page HTML to find the actual result structure:
 ```bash
-playwright-cli --raw eval "() => document.body.innerHTML.slice(0, 3000)"
+playwright-cli -s=<profile-name> --raw eval "() => document.body.innerHTML.slice(0, 3000)"
 ```
 
 ### Step 8 — Visit a result (optional)
 
 ```bash
-playwright-cli goto "https://example.com/result-page"
+playwright-cli -s=<profile-name> goto "https://example.com/result-page"
 sleep 2
-playwright-cli --raw eval "() => document.body.innerText.slice(0, 5000)"
+playwright-cli -s=<profile-name> --raw eval "() => document.body.innerText.slice(0, 5000)"
 ```
 
 **Check:** The page content loaded correctly.
@@ -159,20 +146,20 @@ If a PDF opens in Chrome's built-in PDF viewer, **do not use `playwright-cli pdf
 1. Select the tab containing the displayed PDF:
 
 ```bash
-playwright-cli tab-list
-playwright-cli tab-select <pdf-tab-index>
+playwright-cli -s=<profile-name> tab-list
+playwright-cli -s=<profile-name> tab-select <pdf-tab-index>
 ```
 
 2. If needed, take a screenshot to locate the PDF viewer toolbar/download button:
 
 ```bash
-playwright-cli screenshot --filename=.playwright-cli/pdf-viewer.png
+playwright-cli -s=<profile-name> screenshot --filename=.playwright-cli/pdf-viewer.png
 ```
 
 3. Trigger the viewer download button and save the actual downloaded file:
 
 ```bash
-playwright-cli --raw run-code "async page => { const out = 'path/to/article.pdf'; const downloadPromise = page.waitForEvent('download', { timeout: 20000 }); await page.mouse.click(1095, 28); const download = await downloadPromise; await download.saveAs(out); return {saved: out, suggested: download.suggestedFilename()}; }"
+playwright-cli -s=<profile-name> --raw run-code "async page => { const out = 'path/to/article.pdf'; const downloadPromise = page.waitForEvent('download', { timeout: 20000 }); await page.mouse.click(1095, 28); const download = await downloadPromise; await download.saveAs(out); return {saved: out, suggested: download.suggestedFilename()}; }"
 ```
 
 4. Verify the saved file is a real PDF:
@@ -186,17 +173,15 @@ file path/to/article.pdf && ls -lh path/to/article.pdf
 - This is especially useful for ScienceDirect/EZproxy PDFs that render correctly in the browser but fail when fetched directly with `curl`.
 - Alternative approaches documented online include Playwright `page.waitForEvent('download')` + `download.saveAs(...)`; direct `fetch()`/request API may fail on proxied or signed PDF URLs.
 
-### Step 10 — Close disposable browsers; preserve persistent workspace sessions
+### Step 10 — Preserve the persistent workspace session
 
-After extracting the final results or finishing the requested browsing task, close only the ad-hoc/disposable session that this agent/session created:
+Leave the selected profile-backed workspace session open after the search. Close it only when the user explicitly asks to close that identified session:
 
 ```bash
-playwright-cli -s=web-search close
+playwright-cli -s=<profile-name> close
 ```
 
-If you created a different named disposable session, close that exact session name. If the session is `default`, close it only if you know this agent/session created it; otherwise ask first.
-
-If you reused a user-requested persistent workspace session (for example `-s=nespresso` with `.playwright/profiles/nespresso`), leave it open unless the user explicitly asks to close it. Never close outside/ambiguous sessions from `playwright-cli list`.
+Never close an outside/ambiguous or in-memory session from `playwright-cli list`.
 
 **Check:** The output names the exact session closed. If it errors because no such browser is open, that's fine.
 
@@ -262,10 +247,10 @@ If any of these appear in the page content:
 | Batch open + fill + submit + extract in one bash command | One action per bash command, inspect between each |
 | Assume selectors like `e1` or `#r1-0` work | Inspect the actual page structure first |
 | Assume no captcha | Check page content after every navigation |
-| Restart browser for every search | Reuse an existing workspace session/profile when available |
+| Restart browser for every search | Reuse the mandatory profile-backed workspace session |
 | Ignore empty results | Stop, inspect the page, find why |
 | Keep trying the same failing approach >3 times | Ask the user for help |
-| Close a persistent workspace session without being asked | Close only disposable sessions; preserve user-requested persistent sessions |
+| Close the persistent workspace session without being asked | Leave it open unless the user explicitly identifies it and asks to close it |
 
 ---
 

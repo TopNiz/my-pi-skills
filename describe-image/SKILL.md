@@ -7,6 +7,10 @@ description: Describe images in detail using pi + a vision model. Supports any p
 
 Describe images using pi's vision model support. Each image produces a Markdown description file with detailed analysis.
 
+## When to use this skill
+
+First determine whether the current model has vision capabilities. If it does, use the `read` tool directly on the image; do not run this script. Use this script only when the current model cannot inspect images itself, or when the user specifically requests a separate vision-model description.
+
 ## Usage
 
 ```bash
