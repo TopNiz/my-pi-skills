@@ -20,7 +20,7 @@ KEYRING_SERVICE = "pi-email-manager.gmail-oauth"
 CLIENT_ACCOUNT = "client-config"
 TOKEN_ACCOUNT = "user-credentials"
 
-if sys.platform == "darwin" and DEPENDENCY_DIR.is_dir():
+if DEPENDENCY_DIR.is_dir():
     sys.path.insert(0, str(DEPENDENCY_DIR))
 
 if sys.platform == "darwin":
