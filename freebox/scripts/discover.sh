@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # discover.sh — Discover Freebox on the local network
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/common.sh"
 
 echo "Discovering Freebox on local network..."
 
@@ -28,7 +30,7 @@ HTTPS_PORT=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys
 API_BASE_URL=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['api_base_url'])")
 DEVICE_TYPE=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['device_type'])")
 BOX_MODEL=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('box_model_name', 'N/A'))")
-UID=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['uid'])")
+FBX_UID=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['uid'])")
 
 MAJOR_VERSION="${API_VERSION%%.*}"
 FBX_BASE="https://${API_DOMAIN}:${HTTPS_PORT}${API_BASE_URL}v${MAJOR_VERSION}"
@@ -39,10 +41,10 @@ echo "  Model:       $BOX_MODEL ($DEVICE_TYPE)"
 echo "  API version: $API_VERSION"
 echo "  Domain:      $API_DOMAIN"
 echo "  HTTPS port:  $HTTPS_PORT"
-echo "  UID:         $UID"
+echo "  UID:         $FBX_UID"
 echo "  Base URL:    $FBX_BASE"
 echo ""
 
-# Save to keychain
-security add-generic-password -a "freebox" -s "freebox-api-base" -w "$FBX_BASE" -U 2>/dev/null
-echo "Base URL saved to keychain (freebox-api-base)"
+# Save to OS secret store
+secret_set "freebox-api-base" "$FBX_BASE"
+echo "Base URL saved to OS secret store (freebox-api-base)"

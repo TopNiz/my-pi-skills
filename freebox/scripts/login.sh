@@ -4,11 +4,13 @@
 # NOTE: this script NEVER triggers the Freebox LCD authorization flow.
 # If the stored app token is invalid, it exits with guidance — re-auth requires the LCD.
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/common.sh"
 
-# ── Read credentials from keychain ──────────────────────────────
-FBX_BASE=$(security find-generic-password -a "freebox" -s "freebox-api-base" -w 2>/dev/null)
-APP_ID=$(security find-generic-password -a "freebox" -s "freebox-app-id" -w 2>/dev/null)
-APP_TOKEN=$(security find-generic-password -a "freebox" -s "freebox-app-token" -w 2>/dev/null)
+# ── Read credentials from OS secret store ───────────────────────
+FBX_BASE=$(secret_get "freebox-api-base" || true)
+APP_ID=$(secret_get "freebox-app-id" || true)
+APP_TOKEN=$(secret_get "freebox-app-token" || true)
 
 if [ -z "$FBX_BASE" ] || [ -z "$APP_ID" ] || [ -z "$APP_TOKEN" ]; then
   echo "❌ Missing credentials in keychain."
@@ -60,7 +62,7 @@ d = json.load(sys.stdin)['result']['permissions']
 print(', '.join(k for k,v in d.items() if v))
 " 2>/dev/null)
 
-security add-generic-password -a "freebox" -s "freebox-session-token" -w "$SESSION_TOKEN" -U 2>/dev/null
+secret_set "freebox-session-token" "$SESSION_TOKEN"
 
 echo "✅ Session opened"
 echo "   Permissions: $PERMS"

@@ -4,14 +4,16 @@
 #   call.sh GET /connection/
 #   call.sh POST /downloads/add/ '{"url":"...","download_dir":"..."}'
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/common.sh"
 
 METHOD="${1:-GET}"
 ENDPOINT="${2:-/connection/}"
 BODY="${3:-}"
 
-# ── Read credentials from keychain ──────────────────────────────
-FBX_BASE=$(security find-generic-password -a "freebox" -s "freebox-api-base" -w 2>/dev/null)
-SESSION_TOKEN=$(security find-generic-password -a "freebox" -s "freebox-session-token" -w 2>/dev/null)
+# ── Read credentials from OS secret store ───────────────────────
+FBX_BASE=$(secret_get "freebox-api-base" || true)
+SESSION_TOKEN=$(secret_get "freebox-session-token" || true)
 
 if [ -z "$FBX_BASE" ] || [ -z "$SESSION_TOKEN" ]; then
   echo "❌ No active session. Run login.sh first."
