@@ -66,6 +66,12 @@ This opens your browser → click "Allow" → the refresh token is stored in mac
 python3 scripts/auth.py --check
 ```
 
+### Always-on Linux machines: systemd-encrypted credentials
+
+For a 24/7 Linux monitor, do not rely on a desktop keyring that may lock when no graphical session is active. Store the Gmail OAuth client configuration and refresh-token JSON as host-bound, user-scoped systemd credentials, then load them into the service with `LoadCredentialEncrypted=`. The service receives decrypted read-only files only under `$CREDENTIALS_DIRECTORY` at runtime; no plaintext OAuth files are retained and nothing is committed to Git.
+
+Use credential names `gmail-oauth-client` and `gmail-oauth-token`. Generate the encrypted files with `systemd-creds encrypt --user --with-key=host`; encrypt from standard input so secrets never appear in command arguments or terminal output. The `auth.py` helper automatically prefers those runtime credentials and refreshes access tokens in memory.
+
 ### 4. Configure your accounts
 
 Edit `scripts/config.json` — Gmail API doesn't need IMAP server/port, just filters:

@@ -19,6 +19,10 @@ DEPENDENCY_DIR = SKILL_DIR / ".deps"
 KEYRING_SERVICE = "pi-email-manager.gmail-oauth"
 CLIENT_ACCOUNT = "client-config"
 TOKEN_ACCOUNT = "user-credentials"
+SYSTEMD_CREDENTIAL_NAMES = {
+    CLIENT_ACCOUNT: "gmail-oauth-client",
+    TOKEN_ACCOUNT: "gmail-oauth-token",
+}
 
 if DEPENDENCY_DIR.is_dir():
     sys.path.insert(0, str(DEPENDENCY_DIR))
@@ -61,7 +65,20 @@ def _secret_tool(*args: str, value: str | None = None) -> subprocess.CompletedPr
         raise CredentialStoreError("The native credential store is unavailable.") from error
 
 
+def _systemd_credential_path(account: str) -> Path | None:
+    directory = os.environ.get("CREDENTIALS_DIRECTORY")
+    name = SYSTEMD_CREDENTIAL_NAMES.get(account)
+    if not directory or not name:
+        return None
+    path = Path(directory) / name
+    return path if path.is_file() else None
+
+
 def _get_secret(account: str) -> str | None:
+    systemd_path = _systemd_credential_path(account)
+    if systemd_path:
+        return systemd_path.read_text(encoding="utf-8")
+
     if sys.platform == "darwin":
         try:
             return keyring.get_password(KEYRING_SERVICE, account)
@@ -78,6 +95,9 @@ def _get_secret(account: str) -> str | None:
 
 
 def _set_secret(account: str, value: str) -> None:
+    if _systemd_credential_path(account):
+        raise CredentialStoreError("Systemd-encrypted credentials are read-only at runtime.")
+
     if sys.platform == "darwin":
         try:
             keyring.set_password(KEYRING_SERVICE, account, value)
@@ -141,13 +161,15 @@ def get_credentials() -> Credentials:
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
+            if not _systemd_credential_path(TOKEN_ACCOUNT):
+                _set_secret(TOKEN_ACCOUNT, creds.to_json())
         else:
             client_config = _load_json_secret(CLIENT_ACCOUNT)
             flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
             callback_port = int(os.environ.get("PI_EMAIL_OAUTH_PORT", "0"))
             open_browser = os.environ.get("PI_EMAIL_OAUTH_OPEN_BROWSER", "1") != "0"
             creds = flow.run_local_server(port=callback_port, open_browser=open_browser)
-        _set_secret(TOKEN_ACCOUNT, creds.to_json())
+            _set_secret(TOKEN_ACCOUNT, creds.to_json())
 
     return creds
 
