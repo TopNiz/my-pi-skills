@@ -1,22 +1,24 @@
 #!/usr/bin/env bash
 # verify.sh — Verify stored Freebox credentials WITHOUT re-authenticating
 #
-# Checks that the app token in the macOS keychain is valid by opening a
+# Checks that the app token in the skill-local .env is valid by opening a
 # session. It NEVER triggers the Freebox LCD authorization flow, so it is
 # safe to run while the user is remote.
 #
 # Exit codes:
-#   0  credentials valid (session token refreshed + stored in keychain)
+#   0  credentials valid (session token refreshed + stored in .env)
 #   1  missing credentials / unreachable box / other failure
 #   2  stored app token is INVALID — re-auth requires LCD, STOP and ask user
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/common.sh"
 
-FBX_BASE=$(security find-generic-password -a "freebox" -s "freebox-api-base" -w 2>/dev/null || true)
-APP_ID=$(security find-generic-password -a "freebox" -s "freebox-app-id" -w 2>/dev/null || true)
-APP_TOKEN=$(security find-generic-password -a "freebox" -s "freebox-app-token" -w 2>/dev/null || true)
+FBX_BASE=$(secret_get "freebox-api-base" || true)
+APP_ID=$(secret_get "freebox-app-id" || true)
+APP_TOKEN=$(secret_get "freebox-app-token" || true)
 
 if [ -z "$FBX_BASE" ] || [ -z "$APP_ID" ] || [ -z "$APP_TOKEN" ]; then
-  echo "❌ Missing keychain credentials (freebox-api-base / freebox-app-id / freebox-app-token)."
+  echo "❌ Missing credentials in ../.env (FREEBOX_API_BASE / FREEBOX_APP_ID / FREEBOX_APP_TOKEN)."
   echo "   ⛔ Do NOT request a new authorization automatically."
   echo "   ⛔ The app must be authorized on the Freebox LCD by someone with physical access."
   exit 1
@@ -50,8 +52,8 @@ d = json.load(sys.stdin)['result']['permissions']
 print(', '.join(k for k,v in d.items() if v))
 " 2>/dev/null || true)
 
-security add-generic-password -a "freebox" -s "freebox-session-token" -w "$SESSION_TOKEN" -U 2>/dev/null
+secret_set "freebox-session-token" "$SESSION_TOKEN"
 
-echo "✅ Stored app token is VALID — session token refreshed (stored in keychain)."
+echo "✅ Stored app token is VALID — session token refreshed in the skill-local .env."
 echo "   ✅ No re-authentication needed — the Freebox LCD is NOT required."
 [ -n "$PERMS" ] && echo "   Permissions: $PERMS"

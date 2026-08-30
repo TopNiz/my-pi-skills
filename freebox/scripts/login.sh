@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 # login.sh — Open a Freebox API session
-# Reads app_token and app_id from keychain, computes HMAC-SHA1, stores session_token in keychain
+# Reads app_token and app_id from the skill-local .env, computes HMAC-SHA1, and stores the session token there
 # NOTE: this script NEVER triggers the Freebox LCD authorization flow.
 # If the stored app token is invalid, it exits with guidance — re-auth requires the LCD.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
-# ── Read credentials from OS secret store ───────────────────────
+# ── Read credentials from the skill-local .env ──────────────────
 FBX_BASE=$(secret_get "freebox-api-base" || true)
 APP_ID=$(secret_get "freebox-app-id" || true)
 APP_TOKEN=$(secret_get "freebox-app-token" || true)
 
 if [ -z "$FBX_BASE" ] || [ -z "$APP_ID" ] || [ -z "$APP_TOKEN" ]; then
-  echo "❌ Missing credentials in keychain."
+  echo "❌ Missing credentials in ../.env."
   echo "   Run discover.sh first, then authorize the app (see SKILL.md Setup)."
   exit 1
 fi

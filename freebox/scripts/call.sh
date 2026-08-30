@@ -11,7 +11,7 @@ METHOD="${1:-GET}"
 ENDPOINT="${2:-/connection/}"
 BODY="${3:-}"
 
-# ── Read credentials from OS secret store ───────────────────────
+# ── Read credentials from the skill-local .env ──────────────────
 FBX_BASE=$(secret_get "freebox-api-base" || true)
 SESSION_TOKEN=$(secret_get "freebox-session-token" || true)
 
@@ -32,9 +32,9 @@ if echo "$HTTP_CODE" | grep -q "403"; then
   rm -f "$TMPFILE"
   if [ "$ERROR" = "auth_required" ]; then
     # Session token expired — refresh it using the STORED app token (no LCD involved)
-    echo "ℹ️  Session token expired ($ERROR) — refreshing from stored keychain token (no LCD needed)..."
+    echo "ℹ️  Session token expired ($ERROR) — refreshing from the stored .env token (no LCD needed)..."
     if bash "$(dirname "$0")/login.sh" >/dev/null 2>&1; then
-      SESSION_TOKEN=$(security find-generic-password -a "freebox" -s "freebox-session-token" -w 2>/dev/null)
+      SESSION_TOKEN=$(secret_get "freebox-session-token" || true)
       TMPFILE=$(mktemp /tmp/fbx-response.XXXXXX)
       HTTP_CODE=$(curl -sk -w "%{http_code}" -o "$TMPFILE" -X "$METHOD" "$FBX_BASE$ENDPOINT" \
         -H "X-Fbx-App-Auth: $SESSION_TOKEN" \

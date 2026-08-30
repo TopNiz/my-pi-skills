@@ -45,6 +45,6 @@ echo "  UID:         $FBX_UID"
 echo "  Base URL:    $FBX_BASE"
 echo ""
 
-# Save to OS secret store
+# Save to the skill-local .env
 secret_set "freebox-api-base" "$FBX_BASE"
-echo "Base URL saved to OS secret store (freebox-api-base)"
+echo "Base URL saved to the skill-local .env (FREEBOX_API_BASE)"

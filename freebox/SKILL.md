@@ -1,7 +1,7 @@
 ---
 name: freebox
-description: Full access to Freebox Server API (FreeboxOS) — connection status, Wi-Fi, LAN, downloads/torrents, file system, calls, contacts, voicemail, TV, system. Authenticates via app_token + HMAC-SHA1 session tokens stored in macOS keychain.
-allowed-tools: Bash(curl:*) Bash(openssl:*) Bash(security:*) Bash(python3:*)
+description: Full access to Freebox Server API (FreeboxOS) — connection status, Wi-Fi, LAN, downloads/torrents, file system, calls, contacts, voicemail, TV, system. Authenticates via app_token + HMAC-SHA1 session tokens stored in the skill-local .env file.
+allowed-tools: Bash(curl:*) Bash(openssl:*) Bash(python3:*)
 ---
 
 # Freebox Skill
@@ -46,16 +46,16 @@ A complete copy of the official FreeboxOS API docs is available at `docs/*.html`
 
 ---
 
-| Credential | Keychain Entry | Purpose |
+| Credential | `.env` variable | Purpose |
 |---|---|---|
-| App token | `freebox-app-token` | Long-lived app identity (one-time authorization) |
-| Session token | `freebox-session-token` | Short-lived auth token (must be renewed) |
-| App ID | `freebox-app-id` | Application identifier |
-| API base URL | `freebox-api-base` | Base URL for API calls |
+| App token | `FREEBOX_APP_TOKEN` | Long-lived app identity (one-time authorization) |
+| Session token | `FREEBOX_SESSION_TOKEN` | Short-lived auth token (must be renewed) |
+| App ID | `FREEBOX_APP_ID` | Application identifier |
+| API base URL | `FREEBOX_API_BASE` | Base URL for API calls |
 
-> **🔒 Security note**: All credentials are read exclusively from macOS keychain. Never echo, print, or pipe them through tools that output to stdout (e.g., avoid `python3 -m json.tool` on auth responses). Use `security find-generic-password -w` to source them directly into shell variables.
+> **🔒 Security note**: Credentials are stored only in `~/.agents/skills/freebox/.env`, which must be owner-readable only (`chmod 600`). Never echo, print, commit, or share this file or its values. The helper scripts load it without requiring a macOS keychain, making them suitable for remote shells.
 
-> **🚨 MANDATORY — Verify before you authenticate**: Before ANY authentication request (or when any API call fails with `auth_required` / `invalid_token` / `pending_token`), **first verify the stored keychain token** with `scripts/verify.sh`. If the stored token is valid, **do NOT re-authenticate** — never run the Setup/authorize flow. The user may be remote with no access to the Freebox LCD. Only request a new authorization after the user explicitly confirms they can physically approve on the LCD.
+> **🚨 MANDATORY — Verify before you authenticate**: Before ANY authentication request (or when any API call fails with `auth_required` / `invalid_token` / `pending_token`), **first verify the stored token** with `scripts/verify.sh`. If the stored token is valid, **do NOT re-authenticate** — never run the Setup/authorize flow. The user may be remote with no access to the Freebox LCD. Only request a new authorization after the user explicitly confirms they can physically approve on the LCD.
 
 ---
 
@@ -63,6 +63,7 @@ A complete copy of the official FreeboxOS API docs is available at `docs/*.html`
 
 ```
 freebox/
+├── .env                        # Owner-only API credentials (never commit/share)
 ├── SKILL.md                    # This file
 ├── docs/                       # Offline API reference (from dev.freebox.fr)
 │   ├── index.html              # Full TOC → start here
@@ -103,7 +104,7 @@ freebox/
 # 1. VERIFY the stored app token (SAFE — never touches the Freebox LCD)
 bash ~/.agents/skills/freebox/scripts/verify.sh
 
-# 2. If valid → open a session (uses keychain token only, no LCD needed)
+# 2. If valid → open a session (uses the stored .env token only, no LCD needed)
 bash ~/.agents/skills/freebox/scripts/login.sh
 
 # 3. Make an authenticated call
@@ -116,9 +117,11 @@ bash ~/.agents/skills/freebox/scripts/call.sh GET /connection/
 
 **Before any authentication request — or whenever any API call fails with `auth_required` / `invalid_token` / `pending_token` — follow this order:**
 
-1. **Check the keychain for an existing app token:**
+1. **Check for an existing app token in the skill-local `.env`:**
    ```bash
-   security find-generic-password -a "freebox" -s "freebox-app-token" -w >/dev/null 2>&1 && echo "token present" || echo "token missing"
+   test -r ~/.agents/skills/freebox/.env && \
+     grep -q '^FREEBOX_APP_TOKEN=' ~/.agents/skills/freebox/.env && \
+     echo "token present" || echo "token missing"
    ```
 2. **If present, verify it is valid** (this NEVER touches the LCD — it only opens a session with the stored token):
    ```bash
@@ -132,7 +135,7 @@ bash ~/.agents/skills/freebox/scripts/call.sh GET /connection/
 ## Setup (One-Time Authorization)
 
 > ⚠️ **This flow requires physical access to the Freebox LCD screen. Only run it when:**
-> 1. No valid `freebox-app-token` exists in keychain **AND** the user has confirmed they can physically approve on the LCD, **or**
+> 1. No valid `FREEBOX_APP_TOKEN` exists in `.env` **AND** the user has confirmed they can physically approve on the LCD, **or**
 > 2. The user explicitly instructs you to re-authenticate.
 >
 > **Never run this flow automatically as a fallback.** If the stored token is invalid, stop and ask the user first.
@@ -190,10 +193,11 @@ RESPONSE=$(curl -sk -X POST "$FBX_BASE/login/authorize/" \
 TRACK_ID=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['track_id'])")
 APP_TOKEN=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['app_token'])")
 
-# Save to keychain immediately — never display the token
-security add-generic-password -a "freebox" -s "freebox-app-token" -w "$APP_TOKEN" -U
-security add-generic-password -a "freebox" -s "freebox-app-id" -w "$APP_ID" -U
-security add-generic-password -a "freebox" -s "freebox-api-base" -w "$FBX_BASE" -U
+# Save to the skill-local .env immediately — never display the token
+source ~/.agents/skills/freebox/scripts/common.sh
+secret_set "freebox-app-token" "$APP_TOKEN"
+secret_set "freebox-app-id" "$APP_ID"
+secret_set "freebox-api-base" "$FBX_BASE"
 
 echo "track_id=$TRACK_ID — approve on Freebox LCD"
 ```
@@ -220,21 +224,22 @@ Status values: `pending` → `granted` | `denied` | `timeout`
 
 ## Login — Opening a Session
 
-Once the app_token is in keychain, opening a session is a 3-step process.
+Once the app token is in the skill-local `.env`, opening a session is a 3-step process.
 
-> **🔑 All credentials come from keychain — never hardcoded or displayed.**
+> **🔑 All credentials come from the skill-local `.env` — never hardcoded or displayed.**
 
 ### Step 1: Get the challenge
 
 ```bash
-FBX_BASE=$(security find-generic-password -a "freebox" -s "freebox-api-base" -w 2>/dev/null)
+source ~/.agents/skills/freebox/.env
+FBX_BASE="$FREEBOX_API_BASE"
 CHALLENGE=$(curl -sk "$FBX_BASE/login/" | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['challenge'])")
 ```
 
 ### Step 2: Compute the HMAC-SHA1 password
 
 ```bash
-APP_TOKEN=$(security find-generic-password -a "freebox" -s "freebox-app-token" -w 2>/dev/null)
+APP_TOKEN="$FREEBOX_APP_TOKEN"
 PASSWORD=$(echo -n "$CHALLENGE" | openssl dgst -sha1 -hmac "$APP_TOKEN" | awk '{print $2}')
 ```
 
@@ -243,7 +248,7 @@ PASSWORD=$(echo -n "$CHALLENGE" | openssl dgst -sha1 -hmac "$APP_TOKEN" | awk '{
 ### Step 3: Open the session
 
 ```bash
-APP_ID=$(security find-generic-password -a "freebox" -s "freebox-app-id" -w 2>/dev/null)
+APP_ID="$FREEBOX_APP_ID"
 
 RESPONSE=$(curl -sk -X POST "$FBX_BASE/login/session/" \
   -H "Content-Type: application/json" \
@@ -255,8 +260,9 @@ if [ "$SUCCESS" = "True" ]; then
   SESSION_TOKEN=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['session_token'])")
   PERMS=$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin)['result']['permissions']; print(', '.join(k for k,v in d.items() if v))")
   
-  # Save session token to keychain
-  security add-generic-password -a "freebox" -s "freebox-session-token" -w "$SESSION_TOKEN" -U
+  # Save session token to the skill-local .env
+  source ~/.agents/skills/freebox/scripts/common.sh
+  secret_set "freebox-session-token" "$SESSION_TOKEN"
   
   echo "✅ Session opened — permissions: $PERMS"
 else
@@ -276,8 +282,9 @@ See `scripts/login.sh` for the complete flow.
 All authenticated calls require the `X-Fbx-App-Auth` header with the session token:
 
 ```bash
-FBX_BASE=$(security find-generic-password -a "freebox" -s "freebox-api-base" -w 2>/dev/null)
-SESSION_TOKEN=$(security find-generic-password -a "freebox" -s "freebox-session-token" -w 2>/dev/null)
+source ~/.agents/skills/freebox/.env
+FBX_BASE="$FREEBOX_API_BASE"
+SESSION_TOKEN="$FREEBOX_SESSION_TOKEN"
 
 curl -sk "$FBX_BASE/connection/" \
   -H "X-Fbx-App-Auth: $SESSION_TOKEN"
@@ -296,15 +303,16 @@ bash ~/.agents/skills/freebox/scripts/call.sh GET /downloads/
 
 ## Session Lifecycle
 
-- **Session tokens expire** after a period of inactivity — if you get `auth_required` errors, run `verify.sh` then `login.sh` (both use the stored keychain token only; the LCD is never needed). `call.sh` also refreshes the session automatically in this case.
+- **Session tokens expire** after a period of inactivity — if you get `auth_required` errors, run `verify.sh` then `login.sh` (both use the stored `.env` app token only; the LCD is never needed). `call.sh` also refreshes the session automatically in this case.
 - **App tokens persist** unless the user revokes them from FreeboxOS or resets the admin password
 - **Never re-authenticate automatically.** Re-authorization with the same `app_id` replaces the old token and **requires physical access to the Freebox LCD**. Only do it after explicit user confirmation.
 
 ### Logout
 
 ```bash
-FBX_BASE=$(security find-generic-password -a "freebox" -s "freebox-api-base" -w 2>/dev/null)
-SESSION_TOKEN=$(security find-generic-password -a "freebox" -s "freebox-session-token" -w 2>/dev/null)
+source ~/.agents/skills/freebox/.env
+FBX_BASE="$FREEBOX_API_BASE"
+SESSION_TOKEN="$FREEBOX_SESSION_TOKEN"
 
 curl -sk -X POST "$FBX_BASE/login/logout/" \
   -H "X-Fbx-App-Auth: $SESSION_TOKEN"
