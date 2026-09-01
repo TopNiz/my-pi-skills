@@ -13,6 +13,7 @@ This repository is intended to be cloned to:
 | Skill | Purpose | Main docs |
 |---|---|---|
 | `ideation` | Record, detail, and track your ideas — quick-log or deep-dive with notes. | [`ideation/SKILL.md`](ideation/SKILL.md) |
+| `md2pdf` | Convert Markdown to styled A4 PDFs via pandoc + weasyprint, with a replaceable default style and a fix for the pandoc 3.9 variation-selector glyph bug. | [`md2pdf/SKILL.md`](md2pdf/SKILL.md) |
 | `ai-usage` | Check account usage, costs, balances, and access across OpenAI, DeepSeek, and Ollama Cloud. | [`ai-usage/SKILL.md`](ai-usage/SKILL.md) |
 | `email-manager` | Fetch IMAP email, categorize messages, detect urgency, prepare reviews, and extract invoices. | [`email-manager/SKILL.md`](email-manager/SKILL.md) |
 | `describe-image` | Describe images in detail using pi with a vision-capable model. | [`describe-image/SKILL.md`](describe-image/SKILL.md) |
@@ -33,6 +34,7 @@ This repository is intended to be cloned to:
 ├── deploy.sh
 ├── .gitignore
 ├── ideation/
+├── md2pdf/
 ├── ai-usage/
 ├── email-manager/
 ├── describe-image/
