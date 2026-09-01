@@ -1,0 +1,92 @@
+/* ============================================================
+   Style par défaut — MD → PDF (pandoc → weasyprint)
+   Thème : Chain-IT (rouge #d81e00 / gris) + emoji fallback
+   Usage : voir md2pdf.sh — remplacez ce fichier pour votre propre style
+   ============================================================ */
+
+@page {
+  size: A4;
+  margin: 1.8cm 1.6cm;
+  @bottom-center {
+    content: counter(page) " / " counter(pages);
+    font-size: 8pt;
+    color: #888;
+    font-family: "Helvetica Neue", sans-serif;
+  }
+}
+
+body {
+  font-family: "Arial Unicode MS", "Apple Color Emoji", "Helvetica Neue", sans-serif;
+  font-size: 9.5pt;
+  line-height: 1.45;
+  color: #222;
+}
+
+h1 {
+  font-size: 17pt;
+  color: #d81e00;
+  margin-bottom: 2pt;
+}
+
+h2 {
+  font-size: 13pt;
+  color: #1a1a1a;
+  border-bottom: 1.5px solid #d81e00;
+  padding-bottom: 2pt;
+  margin-top: 16pt;
+}
+
+h3 {
+  font-size: 11pt;
+  margin-top: 10pt;
+}
+
+blockquote {
+  border-left: 3px solid #d81e00;
+  margin: 6pt 0;
+  padding: 4pt 10pt;
+  background: #faf5f4;
+  color: #333;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8pt 0;
+  font-size: 8.6pt;
+}
+
+th {
+  background: #d81e00;
+  color: #fff;
+  padding: 4pt 5pt;
+  text-align: left;
+  font-weight: 600;
+}
+
+td {
+  border: 0.5pt solid #ccc;
+  padding: 3.5pt 5pt;
+  vertical-align: top;
+}
+
+tr:nth-child(even) td {
+  background: #f7f7f7;
+}
+
+code {
+  font-family: "Menlo", monospace;
+  font-size: 8.3pt;
+  background: #f0f0f0;
+  padding: 0 2pt;
+}
+
+strong {
+  color: #111;
+}
+
+hr {
+  border: none;
+  border-top: 1px solid #ddd;
+  margin: 10pt 0;
+}
