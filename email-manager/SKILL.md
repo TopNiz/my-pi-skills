@@ -201,19 +201,19 @@ After presenting the categorized summary, offer to:
 
 ---
 
-### ✍️ Reply Drafting
+### ✍️ Email Authoring and Drafting
 
-When the user asks to draft a reply, use the **[reply-style](../reply-style/SKILL.md)** skill to generate the email content:
+When the user asks to draft any email — a reply, a new message, a report, a summary, or an invoice email — use the **[email-authoring](../email-authoring/SKILL.md)** skill to generate the content:
 
-1. **Load the reply-style skill** — Read `../reply-style/SKILL.md` and `../reply-style/references/STYLE-GUIDE.md`
-2. **Look up the sender** — Check if the sender exists in `../reply-style/contacts/index.json`
-3. **Read contact history** — If found, read their messages from `../reply-style/contacts/messages/<email>.json` to match your authoring style
-4. **Apply presentation templates** — For structured data (invoices, readings, amounts), use `../reply-style/references/EMAIL-TEMPLATES.md` for the HTML layout (tables, headings, colors)
-5. **Use the correct signature** — French or English HTML signature from `STYLE-GUIDE.md` section 11, populated from `../reply-style/config/signature.json`
-6. **Save as draft in Gmail** — Use the Gmail API `drafts.create()` with `multipart/alternative` (HTML + plain text)
-7. **Wait for confirmation** — Never send without explicit user approval
+1. **Load the email-authoring skill** — Read `../email-authoring/SKILL.md` and `../email-authoring/references/STYLE-GUIDE.md`
+2. **Use contact context for replies** — For a reply or a known recipient, check `../email-authoring/contacts/index.json` and read the matching message history when available. Do not require contact history for new emails.
+3. **Match language and tone** — Apply the authoring guidance and choose the appropriate language-specific signature.
+4. **Apply presentation templates** — For structured content such as reports, summaries, invoices, readings, or comparisons, use `../email-authoring/references/EMAIL-TEMPLATES.md`, including its stylesheet, container, headings/tables, and visual hierarchy.
+5. **Use the correct signature** — Use the French or English HTML signature from `STYLE-GUIDE.md` section 11, populated from `../email-authoring/config/signature.json`, unless a documented personal-message exception applies.
+6. **Create the Gmail draft** — Use the Gmail API `drafts.create()` with `multipart/alternative` (HTML + plain text) and leave `To` empty when the user asks for an unaddressed draft.
+7. **Wait for confirmation before sending** — Never send without explicit user approval.
 
-> The reply-style skill handles **authoring style** (tone, greeting, language) and **presentation style** (HTML tables, layout, signature). The email-manager skill handles Gmail API transport (fetching, drafting, sending).
+> The email-authoring skill handles **authoring style** (tone, greeting, language) and **presentation style** (HTML layout, structured templates, and signatures). The email-manager skill handles Gmail transport, fetching, draft creation, and sending safeguards.
 
 ---
 

@@ -1,12 +1,12 @@
 ---
-name: reply-style
-description: Answer messages by imitating your writing style. Fetches your sent emails from IMAP, builds per-contact style profiles, and drafts replies in your voice — matching the language and tone you use with each person. Supports email, Slack, LinkedIn, SMS, and any messaging platform.
+name: email-authoring
+description: Author new emails and replies in your writing style. Fetches your sent emails from IMAP, builds per-contact style profiles, and drafts HTML emails matching your language, tone, presentation preferences, and signature.
 allowed-tools: read write edit bash
 ---
 
-# 🗣️ Reply Style Skill
+# ✉️ Email Authoring Skill
 
-Drafts replies to messages by learning **your personal writing style per contact** (tone, language, greeting, sign-off) and your **preferred presentation style** (HTML formatting, tables, structured layouts). Instead of generic AI-sounding responses, get replies that sound like *you* and look like *you*.
+Authors new emails and replies by learning **your personal writing style per contact** (tone, language, greeting, sign-off) and your **preferred presentation style** (HTML formatting, tables, structured layouts). Instead of generic AI-sounding messages, get emails that sound like *you* and look like *you*.
 
 ---
 
@@ -32,7 +32,7 @@ security add-generic-password -a "your.email@example.com" -s "email-manager" -w 
 Build the contact database from your last 6 months of sent emails:
 
 ```bash
-cd ~/.agents/skills/reply-style
+cd ~/.agents/skills/email-authoring
 python3 scripts/fetch_sent.py scripts/config.json
 ```
 
@@ -74,12 +74,12 @@ You can also set categories manually:
 
 ---
 
-## 📬 Core Workflow: Reply to a Message
+## 📬 Core Workflow: Author an Email
 
 ### How it works
 
-1. You receive a message (email, Slack, LinkedIn, SMS — any platform)
-2. You say: **"Reply to this in my style"**
+1. You receive an email
+2. You say: **"Draft this email in my style"** or **"Reply to this in my style"**
 3. The agent:
    - Looks up the sender in `contacts/index.json`
    - Reads your past messages to that person from `contacts/messages/<email>.json`
@@ -373,7 +373,7 @@ Fetched sent messages may include AI-generated messages (messages written by an 
 
 ```bash
 # Example: remove the first message from Sonia's contact file
-cd ~/.agents/skills/reply-style
+cd ~/.agents/skills/email-authoring
 python3 -c "
 import json
 with open('contacts/messages/sonia_tfifha_at_yahoo_dot_fr.json') as f:
@@ -397,7 +397,7 @@ python3 scripts/rebuild_contacts.py scripts/config.json
 To stay current, re-fetch periodically:
 
 ```bash
-cd ~/.agents/skills/reply-style
+cd ~/.agents/skills/email-authoring
 python3 scripts/fetch_sent.py scripts/config.json
 python3 scripts/rebuild_contacts.py scripts/config.json
 ```
@@ -409,7 +409,7 @@ This refreshes the database with new sent messages. Existing categories are pres
 ## 📁 File Reference
 
 ```
-reply-style/
+email-authoring/
 ├── SKILL.md                       ← This file
 ├── scripts/
 │   ├── config.json                ← Account configuration (reuses email-manager Keychain)

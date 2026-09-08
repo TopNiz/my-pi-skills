@@ -15,8 +15,7 @@
 .DS_Store
 
 # Personal data — never commit
-reply-style/contacts/
+email-authoring/contacts/
 extract-text/.text_content/
 email-manager/instructions/
 email-manager/invoices/
-
