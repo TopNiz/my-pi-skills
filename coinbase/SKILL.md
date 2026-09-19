@@ -13,6 +13,11 @@ SKILL_DIR="/Users/nizarayed/.agents/skills/coinbase"
 RUNNER="$SKILL_DIR/scripts/coinbase_readonly.py"
 ```
 
+The runner's dependency (`python-dotenv`) comes from the skill's `pyproject.toml`, so run
+`uv sync` once per machine before first use (`.venv` is gitignored). The script detects and
+re-execs into `.venv` automatically. On a host where the XRP Strategy project or the local
+`.env` is absent, the runner stops early with a configuration error — that is expected.
+
 The credential configuration is stored at `$SKILL_DIR/.env`, outside the Git project. It must never be printed, copied, inspected, or committed.
 
 ## Current capability and boundaries

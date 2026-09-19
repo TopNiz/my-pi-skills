@@ -1,0 +1,10 @@
+# Keep shell scripts LF so they stay executable when the repo is cloned on
+# Windows (Git Bash) — a CRLF shebang breaks "bad interpreter".
+*.sh text eol=lf
+
+# Python sources stay LF as well.
+*.py text eol=lf
+
+# Lockfiles are generated and must not be rewritten by line-ending filters.
+uv.lock -text
+*.whl binary

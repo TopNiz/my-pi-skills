@@ -34,13 +34,17 @@ google-calendar/
 5. **Download JSON** → save as `~/.agents/skills/google-calendar/credentials.json`
 6. **OAuth consent screen**: External → add your email as test user
 
-### 2. Authenticate
+### 2. Install dependencies and authenticate
 
 ```bash
-python3 ~/.agents/skills/google-calendar/scripts/auth.py
+cd ~/.agents/skills/google-calendar
+uv sync                    # creates .venv from pyproject.toml
+python3 scripts/auth.py    # opens a browser tab for OAuth2 consent
 ```
 
-This opens a browser tab, you approve access, token is saved to `token.json`. Done.
+`uv sync` must be run once per machine (`.venv` is gitignored). The scripts re-exec into
+`.venv` automatically, so `python3 scripts/events.py` works with any interpreter. The token
+is saved to the gitignored `token.json`.
 
 ### 3. Check auth status
 

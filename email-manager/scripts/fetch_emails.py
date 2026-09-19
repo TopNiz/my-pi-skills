@@ -57,7 +57,7 @@ def load_config(path):
     if not path or not os.path.exists(path):
         print(json.dumps({"error": f"Config file not found: {path}"}), file=sys.stderr)
         sys.exit(1)
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 

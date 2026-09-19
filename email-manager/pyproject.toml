@@ -1,0 +1,19 @@
+[project]
+name = "pi-email-manager"
+version = "1.0.0"
+description = "Gmail API transport, OAuth2 credential storage and invoice extraction for the pi email-manager skill"
+requires-python = ">=3.10"
+dependencies = [
+    # Gmail API + OAuth2 transport
+    "google-auth>=2.0",
+    "google-auth-oauthlib>=1.0",
+    "google-api-python-client>=2.0",
+    # Native OS credential store (macOS Keychain / Windows Credential Manager).
+    # Linux uses the system secret-tool instead, so keyring is not needed there.
+    "keyring>=25.0; sys_platform == 'darwin' or sys_platform == 'win32'",
+]
+
+# The skill is a collection of scripts, not an installable package: nothing is
+# built or installed for the project itself, only its dependencies.
+[tool.uv]
+package = false

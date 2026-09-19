@@ -1,6 +1,0 @@
-# Gmail OAuth2 and native credential-store support.
-# Installed locally under .deps; never committed.
-google-auth>=2.0
-google-auth-oauthlib>=1.0
-google-api-python-client>=2.0
-keyring>=25.0; sys_platform == "darwin"

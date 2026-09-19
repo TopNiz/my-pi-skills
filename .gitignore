@@ -9,6 +9,8 @@
 **/user_preferences.json
 **/__pycache__/
 **/.deps/
+**/.venv/
+**/tmp/
 **/.playwright-cli/
 *.pyc
 *.pyo

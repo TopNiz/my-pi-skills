@@ -41,13 +41,26 @@ No passwords are stored or needed.
 ~/.agents/skills/email-manager/credentials.gmail.json
 ```
 
-6. Import it into the native OS credential store and remove the temporary file:
+6. Create the skill environment with **uv** (dependencies are declared in `pyproject.toml`) and store refresh tokens in the native OS credential store:
 
 ```bash
 cd ~/.agents/skills/email-manager
-python3 -m pip install --target .deps -r requirements-keyring.txt
+uv sync                        # creates .venv from pyproject.toml + uv.lock
 python3 scripts/auth.py --migrate
 ```
+
+> ⚠️ **Never install these dependencies with `pip install --target .deps`.** On Windows, pip
+> stages wheels in a `mkdtemp()` tree (mode `0o700`) and then `shutil.move`s them into place.
+> The rename carries that DACL with it, so every installed file gets
+> `D:P(A;OICI;FA;;;OW)(FA;;;SY)(FA;;;BA)` — owner-only, inheritance **disabled**. Anything that
+> is not the owner (sandboxed agents, other accounts, services) is then denied, and
+> `OW`/OWNER RIGHTS silently hides the damage from the owner. `uv sync` inherits ACLs
+> correctly and is immune. If a tree is already damaged: `icacls <dir> /reset /T /C /Q`.
+>
+> `auth.py` and `fetch_emails.py` transparently re-exec into `.venv`, so `python3 scripts/...`
+> and `uv run python scripts/...` both work.
+
+On Windows, `credentials.gmail.json` remains as an ignored local OAuth client configuration; the refresh token is stored in Windows Credential Manager.
 
 7. **OAuth consent screen**: If needed, set to "External" and add your email as a test user
 
@@ -65,6 +78,54 @@ This opens your browser → click "Allow" → the refresh token is stored in mac
 ```bash
 python3 scripts/auth.py --check
 ```
+
+### 4. Troubleshoot: other agents or machines cannot authenticate
+
+Credentials live in the **OS credential store of the account that ran the consent**, plus the
+OAuth client file `credentials.gmail.json` (gitignored → absent on a fresh clone). Both are
+per-account and per-machine, so a second agent or host starts with nothing and drops into an
+interactive browser consent it cannot complete.
+
+```bash
+python3 scripts/auth.py --diagnose   # exit 0 usable / 1 needs provisioning; prints no secrets
+```
+
+| What `--diagnose` says | Meaning | Fix |
+|---|---|---|
+| `refresh-token: present` → `OK` | fine | — |
+| `refresh-token: ABSENT`, client config present | next attempt needs a browser | provision a token (below) |
+| client config `ABSENT` as well | OAuth cannot even start | copy `credentials.gmail.json` here (it is gitignored), then authenticate |
+| `refresh FAILED: invalid_grant` | token revoked or expired | `python3 scripts/auth.py` |
+
+**`WinError 1312: A specified logon session does not exist`** — the calling process has no
+interactive logon session, so Windows Credential Manager cannot persist anything (`CredWrite`
+fails). Typical for service or sandboxed agents; it is not an ACL problem. Authorization may
+have *succeeded* and the token still could not be saved, so switch that agent to the **file
+token store**:
+
+```powershell
+# in your normal interactive terminal (you are already authenticated → no new consent)
+cd %USERPROFILE%\.agents\skills\email-manager
+python .\scripts\auth.py --export .\token.gmail.json
+
+# then the non-interactive agent runs with:
+set PI_EMAIL_MANAGER_TOKEN_FILE=%USERPROFILE%\.agents\skills\email-manager\token.gmail.json
+python .\scripts\fetch_emails.py scripts\config.json --max=5
+```
+
+`PI_EMAIL_MANAGER_TOKEN_FILE` takes precedence over the OS credential store and is read *and*
+written, so such an agent can also complete a fresh consent by itself. As a safety net, when a
+vault write fails the token is now kept in `token.gmail.json` (gitignored) instead of being
+discarded, and the import instructions are printed.
+
+> ⚠️ A token file holds a `gmail.modify` refresh token. It inherits the directory's
+> permissions — that is exactly what lets a sandboxed agent read it. Keep it inside the skill
+> directory (gitignored), and delete it once the agent no longer needs it. To move it into the
+> OS store afterwards: `python scripts/auth.py --migrate` (which deletes the file).
+
+**Provisioning another machine** uses the same recipe: copy `credentials.gmail.json` (it is
+not in Git) and then either run the consent once there, or `--export` here and `--migrate`
+there.
 
 ### Always-on Linux machines: systemd-encrypted credentials
 
@@ -559,8 +620,9 @@ print(f'Reste INBOX: {remaining}')
 ## 🔐 Security Notes
 
 - **OAuth2** — No passwords stored. Authentication is via Google's OAuth2 flow.
-- **Native credential store** — OAuth client configuration and refresh tokens are stored in macOS Keychain or Linux Secret Service/GNOME Keyring, never committed or printed.
-- **Temporary migration files** — `credentials.gmail.json` and `token.gmail.json` are imported with `auth.py --migrate` and removed only after successful native-store writes.
+- **Native credential store** — Refresh tokens are stored in macOS Keychain, Windows Credential Manager, or Linux Secret Service/GNOME Keyring, never committed or printed.
+- **OAuth client configuration** — On Windows, the ignored local `credentials.gmail.json` file is used; other platforms import it into the native credential store.
+- **Temporary migration files** — `token.gmail.json` is imported with `auth.py --migrate` and removed only after a successful native-store write.
 - **Revoke access** at https://myaccount.google.com/permissions anytime.
 - **Invoice storage**: Ensure the invoice directory has appropriate backups.
 - **Scope**: `gmail.modify` — required for reading, deleting, and moving emails.
@@ -570,7 +632,9 @@ print(f'Reste INBOX: {remaining}')
 ```
 email-manager/
 ├── SKILL.md                    ← This file — skill instructions
-├── requirements-keyring.txt    ← Native credential-store dependency
+├── pyproject.toml              ← Dependency declarations (source of truth)
+├── uv.lock                     ← Pinned, reproducible dependency set
+├── .venv/                      ← uv-managed environment (`uv sync`; gitignored)
 ├── scripts/
 │   ├── config.json             ← Account config (no passwords!)
 │   ├── auth.py                 ← Gmail OAuth2 via the native credential store
@@ -581,6 +645,20 @@ email-manager/
 │   ├── CATEGORIES.md           ← Category taxonomy (edit to customize)
 │   └── user_preferences.json   ← Learned categorization rules (auto-created)
 ```
+
+### Runtime environment
+
+Dependencies live in `pyproject.toml` and are installed by `uv`:
+
+```bash
+uv sync                  # create/refresh .venv to match uv.lock
+uv lock --upgrade        # bump the locked versions
+uv run python scripts/fetch_emails.py scripts/config.json
+```
+
+`keyring` is only pulled in on macOS/Windows (`sys_platform` marker); Linux uses the system
+`secret-tool`. To add a dependency, edit `pyproject.toml` then run `uv sync` — do **not**
+reintroduce a `--target` directory or a `requirements*.txt` file.
 
 ## 🔑 Gmail API vs IMAP — Key Differences
 

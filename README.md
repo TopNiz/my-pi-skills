@@ -31,7 +31,10 @@ This repository is intended to be cloned to:
 ```text
 .
 ├── README.md
+├── PYTHON-ENVIRONMENTS.md
 ├── deploy.sh
+├── uv-sync-all.sh
+├── .gitattributes
 ├── .gitignore
 ├── ideation/
 ├── md2pdf/
@@ -70,7 +73,33 @@ To update an existing clone:
 ```bash
 cd ~/.agents/skills
 git pull
+./uv-sync-all.sh    # rebuild the venv of every skill that needs Python packages
 ```
+
+## Python environments
+
+Skills that need PyPI packages declare them in a per-skill `pyproject.toml` and install them
+with [uv](https://docs.astral.sh/uv/) into a per-skill `.venv`. The venv is **not** committed,
+so every machine builds its own:
+
+```bash
+cd ~/.agents/skills
+./uv-sync-all.sh              # sync all skill environments from their uv.lock
+./uv-sync-all.sh --upgrade    # refresh uv.lock first
+```
+
+Skill scripts transparently re-exec into their own `.venv`, so it does not matter whether
+they are invoked as `python3 scripts/x.py`, `uv run python scripts/x.py`, or from cron.
+
+> **Never install skill dependencies with `pip install --target`.** On Windows pip stages
+> wheels in a `mkdtemp()` tree (mode `0o700`) and `shutil.move`s them into place; the rename
+> carries an owner-only, inheritance-breaking DACL with it, which locks the dependencies out
+> of sandboxed agents and every non-owner account — while staying invisible to the owner.
+> Use `uv sync` (or `uv pip install --target`, which inherits correctly). Repair a damaged
+> tree with `icacls <dir> /reset /T /C /Q`.
+
+See [`PYTHON-ENVIRONMENTS.md`](PYTHON-ENVIRONMENTS.md) for the full standard, the per-skill
+inventory, the measured evidence, and the Windows ACL audit of this repository.
 
 ## Secrets and local configuration
 
@@ -79,14 +108,29 @@ This repository is public, so secrets must stay local to each machine.
 The `.gitignore` excludes common secret and machine-local files:
 
 ```gitignore
+# Secrets & credentials
 .env
 **/config.json
+**/signature.json
+**/credentials.json
+**/credentials.gmail.json
+**/token.json
+**/token.gmail.json
 **/user_preferences.json
 **/__pycache__/
+**/.deps/
+**/.venv/
+**/tmp/
 **/.playwright-cli/
 *.pyc
 *.pyo
 .DS_Store
+
+# Personal data — never commit
+email-authoring/contacts/
+extract-text/.text_content/
+email-manager/instructions/
+email-manager/invoices/
 ```
 
 Before committing, it is still worth checking what Git will publish:
@@ -137,7 +181,10 @@ cp scripts/config.template.json scripts/config.json
 $EDITOR scripts/config.json
 ```
 
-For Gmail, enable IMAP and use an app password rather than your normal account password.
+For Gmail, no IMAP or app password is needed: the skill uses the **Gmail API with OAuth2**
+(`scripts/auth.py`), and the refresh token is stored in the native OS credential store
+(Windows Credential Manager, macOS Keychain, or the Linux Secret Service) — never in the
+config file. `setup.sh` runs `uv sync` and starts that OAuth2 flow.
 
 ### Other local state
 

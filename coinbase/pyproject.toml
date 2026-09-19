@@ -1,0 +1,12 @@
+[project]
+name = "pi-coinbase"
+version = "1.0.0"
+description = "Read-only Coinbase account review for the pi coinbase skill"
+requires-python = ">=3.10"
+dependencies = [
+    "python-dotenv>=1.0",
+]
+
+# Scripts only: nothing to build or install, dependencies only.
+[tool.uv]
+package = false

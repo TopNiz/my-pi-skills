@@ -152,12 +152,12 @@ if [ $# -eq 0 ]; then
   exit 0
 fi
 
-# Pull on each remote host
+# Pull on each remote host, then refresh that host's skill venvs
 for HOST in "$@"; do
   echo ""
   echo "🌐 Pulling on $HOST..."
   ssh -o RemoteCommand=none -o RequestTTY=no "$HOST" \
-    "cd ~/.agents/skills && git pull"
+    "cd ~/.agents/skills && git pull && ./uv-sync-all.sh"
   echo "✅ $HOST updated"
 done
 

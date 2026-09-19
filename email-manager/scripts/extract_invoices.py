@@ -48,7 +48,7 @@ SENDER_BLACKLIST = [
 
 
 def load_json(path):
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -273,7 +273,7 @@ def main():
     if invoice_emails:
         os.makedirs(storage_dir, exist_ok=True)
         meta_path = os.path.join(storage_dir, f"_invoice_index_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
-        with open(meta_path, "w") as f:
+        with open(meta_path, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2, ensure_ascii=False)
         print(f"\n📁 Invoice index saved to: {meta_path}", file=sys.stderr)
 

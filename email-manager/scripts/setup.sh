@@ -1,105 +1,68 @@
 #!/bin/bash
-# Email Manager Skill — Setup Script
-# Run once: chmod +x setup.sh && ./setup.sh
+# Email Manager Skill — Setup Script (uv-based)
+#
+# Run once per machine: chmod +x setup.sh && ./setup.sh
+#
+# Dependencies live in ../pyproject.toml and are installed by uv into
+# ../.venv. Do not use "pip install --target": on Windows pip stages wheels in
+# a mkdtemp() tree (mode 0o700) and moves them into place, which stamps an
+# owner-only, inheritance-breaking DACL on every installed file.
 
 set -e
 
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 CONFIG_FILE="$SKILL_DIR/scripts/config.json"
-FETCH_SCRIPT="$SKILL_DIR/scripts/fetch_emails.py"
+CONFIG_TEMPLATE="$SKILL_DIR/scripts/config.template.json"
 
 echo "📧 Email Manager — Setup"
 echo "========================"
 echo ""
 
-# 1. Validate Python
-if ! command -v python3 &>/dev/null; then
-    echo "❌ Python 3 is required. Install it first."
+# 1. Validate prerequisites
+if ! command -v uv &>/dev/null; then
+    echo "❌ uv is required (it manages the skill venv). Install it first:"
+    echo "     https://docs.astral.sh/uv/getting-started/installation/"
     exit 1
 fi
+echo "✅ uv found: $(uv --version)"
 
-echo "✅ Python 3 found: $(python3 --version)"
+# 2. Install dependencies into the skill venv
+echo ""
+echo "📦 Syncing dependencies from pyproject.toml..."
+(cd "$SKILL_DIR" && uv sync)
+echo "✅ Environment ready: $SKILL_DIR/.venv"
 
-# 2. Make scripts executable
+# 3. Make scripts executable
 chmod +x "$SKILL_DIR/scripts/"*.py "$SKILL_DIR/scripts/"*.sh 2>/dev/null || true
 echo "✅ Scripts made executable"
 
-# 3. Check that config file exists
+# 4. Ensure the local config exists (never committed — see .gitignore)
 if [ ! -f "$CONFIG_FILE" ]; then
-    echo "❌ Config file missing: $CONFIG_FILE"
-    exit 1
+    cp "$CONFIG_TEMPLATE" "$CONFIG_FILE"
+    echo "✅ Created $CONFIG_FILE from the template"
+    echo "   Review it (filters, invoice storage dir, protected senders, routing)."
+else
+    echo "✅ Config already present: $CONFIG_FILE"
 fi
 
-# 4. Prompt for email configuration
+# 5. Authenticate with Google (OAuth2, one-time per machine)
 echo ""
-echo "📝 Email Configuration"
-echo "----------------------"
-echo "You need: an IMAP-enabled email account."
-echo "For Gmail: Enable IMAP, then create an App Password at:"
-echo "  https://myaccount.google.com/apppasswords"
-echo ""
-echo "For Outlook/Hotmail: Use your regular password or an app password."
-echo ""
-
-read -p "IMAP server [imap.gmail.com]: " IMAP_SERVER
-IMAP_SERVER=${IMAP_SERVER:-imap.gmail.com}
-
-read -p "IMAP port [993]: " IMAP_PORT
-IMAP_PORT=${IMAP_PORT:-993}
-
-read -p "Email address: " EMAIL_USER
-read -sp "Password / App Password: " EMAIL_PASS
-echo ""
-
-read -p "Use SSL? [yes]: " USE_SSL
-USE_SSL=${USE_SSL:-yes}
-
-echo ""
-read -p "Invoice storage directory [~/Nextcloud/.../400-Comptabilite/Invoices]: " INVOICE_DIR
-INVOICE_DIR=${INVOICE_DIR:-~/Nextcloud/Invoices}
-
-# 5. Update config file using Python for JSON safety
-python3 -c "
-import json
-with open('$CONFIG_FILE') as f:
-    cfg = json.load(f)
-cfg['imap']['server'] = '$IMAP_SERVER'
-cfg['imap']['port'] = $IMAP_PORT
-cfg['imap']['username'] = '$EMAIL_USER'
-cfg['imap']['password'] = '$EMAIL_PASS'
-cfg['imap']['use_ssl'] = '${USE_SSL,,}' == 'yes'
-cfg['invoices']['storage_dir'] = '$INVOICE_DIR'
-with open('$CONFIG_FILE', 'w') as f:
-    json.dump(cfg, f, indent=2)
-"
-
-echo ""
-echo "✅ Configuration saved to: $CONFIG_FILE"
-
-# 6. Create invoice directory if needed
-mkdir -p "$INVOICE_DIR"
-echo "✅ Invoice directory ready: $INVOICE_DIR"
-
-# 7. Test IMAP connection
-echo ""
-echo "🔍 Testing IMAP connection..."
-python3 -c "
-import json, imaplib
-with open('$CONFIG_FILE') as f:
-    cfg = json.load(f)
-ic = cfg['imap']
-try:
-    if ic['use_ssl']:
-        mail = imaplib.IMAP4_SSL(ic['server'], ic['port'])
-    else:
-        mail = imaplib.IMAP4(ic['server'], ic['port'])
-    mail.login(ic['username'], ic['password'])
-    status, folders = mail.list()
-    mail.logout()
-    print('✅ IMAP connection successful!')
-except Exception as e:
-    print(f'❌ IMAP connection failed: {e}')
-"
+if python3 "$SKILL_DIR/scripts/auth.py" --check >/dev/null 2>&1; then
+    echo "✅ Gmail already authenticated"
+else
+    echo "🔐 Not authenticated yet. Creating the Gmail OAuth2 token now."
+    echo "   A browser window will open — approve access for the Gmail API."
+    if [ -f "$SKILL_DIR/credentials.gmail.json" ] || [ -f "$SKILL_DIR/credentials.json" ]; then
+        python3 "$SKILL_DIR/scripts/auth.py"
+        echo "✅ Authenticated"
+    else
+        echo "⚠️  No OAuth client file found. Before authenticating:"
+        echo "   1. Create a Desktop-app OAuth client in Google Cloud Console"
+        echo "   2. Enable the Gmail API"
+        echo "   3. Save the JSON as: $SKILL_DIR/credentials.gmail.json"
+        echo "   Then run: python3 scripts/auth.py"
+    fi
+fi
 
 echo ""
 echo "🚀 Setup complete!"
