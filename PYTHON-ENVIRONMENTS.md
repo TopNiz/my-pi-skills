@@ -24,7 +24,10 @@ cd ~/.agents/skills
 ```
 
 `uv-sync-all.sh` is also run automatically by `deploy.sh` on each remote host after
-`git pull`, because `.venv/` is never committed — every machine builds its own.
+`git pull`, because `.venv/` is never committed — every machine builds its own. It probes
+`~/.local/bin`, `~/.cargo/bin`, `/opt/homebrew/bin` and `/usr/local/bin` for the binary, since
+the uv installer puts it in `~/.local/bin`, which is **not** on `PATH` for the non-interactive
+ssh commands `deploy.sh` uses.
 
 ### Canonical bootstrap snippet
 
@@ -32,7 +35,8 @@ Paste this **before** the third-party imports of a skill's entry point (the modu
 other scripts import, so one edit covers all of them):
 
 ```python
-_VENV_PYTHON = SKILL_DIR / ".venv" / (
+_VENV_DIR = SKILL_DIR / ".venv"
+_VENV_PYTHON = _VENV_DIR / (
     "Scripts" if os.name == "nt" else "bin"
 ) / ("python.exe" if os.name == "nt" else "python")
 _RUNNING_IN_VENV_ENV = "PI_<SKILL>_IN_VENV"          # must be unique per skill
@@ -60,7 +64,11 @@ def _ensure_skill_venv() -> None:
     """Re-exec under the uv-managed skill venv declared in pyproject.toml."""
     if os.environ.get(_RUNNING_IN_VENV_ENV) == "1" or not _VENV_PYTHON.is_file():
         return
-    if os.path.realpath(sys.executable) == os.path.realpath(str(_VENV_PYTHON)):
+    # Detect the venv via sys.prefix, NOT by comparing interpreter paths: on POSIX
+    # .venv/bin/python is a symlink to the base interpreter, so both paths resolve
+    # to /usr/bin/python3.x and the comparison wrongly reports "already inside the
+    # venv" — silently disabling this bootstrap on Linux and macOS.
+    if Path(sys.prefix).resolve() == _VENV_DIR.resolve():
         return
     # subprocess (not os.execv) so stdout/stderr stay attached: on Windows
     # execv exits the parent before the child writes, losing piped output.
@@ -83,8 +91,7 @@ _force_utf8_stdio()
 _ensure_skill_venv()
 ```
 
-Four non-obvious details, all learned the hard way:
-
+Five non-obvious details, all learned the hard way:
 - **`subprocess`, not `os.execv`.** On Windows `execv` terminates the parent before the
   child writes, so output going to a pipe (agent-captured stdout, `| head`, CI logs) is
   silently dropped. The child ran fine; the result was thrown away.
@@ -95,6 +102,12 @@ Four non-obvious details, all learned the hard way:
   be replayed: the child inherits an exhausted stdin and runs *nothing*, so the caller sees a
   silent success with no output. Re-exec only when `sys.argv[0]` is a real file; otherwise
   inject the venv's `site-packages` into `sys.path` for the current interpreter.
+- **Detect the venv with `sys.prefix`, not by comparing interpreter paths.** On POSIX
+  `.venv/bin/python` is a symlink to the base interpreter, so `Path(sys.executable).resolve()`
+  equals `Path(".venv/bin/python").resolve()` — the bootstrap concluded "already in the venv"
+  and did nothing, so every skill failed with `ModuleNotFoundError` on Linux and macOS while
+  working perfectly on Windows (where `.venv/Scripts/python.exe` is a real copy). Found by
+  running the migrated skills on the Linux hosts, and invisible to Windows-only testing.
 - **Force UTF-8 stdio.** `google-calendar` crashed with `UnicodeEncodeError` on its own
   status emoji under the cp1252 console, and `email-manager`'s `ensure_ascii=False` JSON
   broke the same way on non-ASCII subjects. Reconfiguring the streams fixes the whole
