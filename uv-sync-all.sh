@@ -18,9 +18,28 @@ cd "$REPO_DIR"
 UPGRADE=0
 [ "${1:-}" = "--upgrade" ] && UPGRADE=1
 
+# The uv installer drops the binary into ~/.local/bin (or ~/.cargo/bin), which is
+# NOT on PATH for non-interactive ssh commands such as deploy.sh's remote step.
+# Look in the usual install locations before concluding uv is missing.
+if ! command -v uv &>/dev/null; then
+    for candidate in \
+        "${UV_INSTALL_DIR:-$HOME/.local/bin}/uv" \
+        "$HOME/.cargo/bin/uv" \
+        /opt/homebrew/bin/uv \
+        /usr/local/bin/uv
+    do
+        if [ -x "$candidate" ]; then
+            PATH="$(dirname "$candidate"):$PATH"
+            export PATH
+            break
+        fi
+    done
+fi
+
 if ! command -v uv &>/dev/null; then
     echo "⚠️  uv not found — skipping skill environments."
-    echo "   Install: https://docs.astral.sh/uv/getting-started/installation/"
+    echo "   Install: curl -LsSf https://astral.sh/uv/install.sh | sh"
+    echo "   (then re-run this script; it also probes ~/.local/bin)"
     exit 0
 fi
 
