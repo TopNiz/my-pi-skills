@@ -71,7 +71,10 @@ def _ensure_skill_venv() -> None:
     """
     if os.environ.get(_RUNNING_IN_VENV_ENV) == "1" or not os.path.isfile(_VENV_PYTHON):
         return
-    if os.path.realpath(sys.executable) == os.path.realpath(_VENV_PYTHON):
+    # Detect the venv via sys.prefix, not by comparing executable paths: on POSIX
+    # .venv/bin/python is a symlink to the base interpreter, so a resolved-path
+    # comparison reports "already inside the venv" and the bootstrap does nothing.
+    if os.path.realpath(sys.prefix) == os.path.realpath(os.path.join(SKILL_DIR, ".venv")):
         return
     # subprocess (not os.execv) so stdout/stderr stay attached: on Windows
     # execv exits the parent before the child writes, losing piped output.

@@ -14,7 +14,8 @@ REPOSITORY = Path("/Users/nizarayed/MyDocuments/002-git/xrp-strategy")
 ENV_PATH = SKILL_DIR / ".env"
 ALLOWED_COMMANDS = frozenset({"account", "portfolios", "portfolio", "orders"})
 
-_VENV_PYTHON = SKILL_DIR / ".venv" / (
+_VENV_DIR = SKILL_DIR / ".venv"
+_VENV_PYTHON = _VENV_DIR / (
     "Scripts" if os.name == "nt" else "bin"
 ) / ("python.exe" if os.name == "nt" else "python")
 _RUNNING_IN_VENV_ENV = "PI_COINBASE_IN_VENV"
@@ -50,7 +51,10 @@ def _ensure_skill_venv() -> None:
     """
     if os.environ.get(_RUNNING_IN_VENV_ENV) == "1" or not _VENV_PYTHON.is_file():
         return
-    if os.path.realpath(sys.executable) == os.path.realpath(str(_VENV_PYTHON)):
+    # Detect the venv via sys.prefix, not by comparing executable paths: on POSIX
+    # .venv/bin/python is a symlink to the base interpreter, so a resolved-path
+    # comparison reports "already inside the venv" and the bootstrap does nothing.
+    if Path(sys.prefix).resolve() == _VENV_DIR.resolve():
         return
     # subprocess (not os.execv) so stdout/stderr stay attached: on Windows
     # execv exits the parent before the child writes, losing piped output.
