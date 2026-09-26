@@ -336,7 +336,24 @@ ssh -o RemoteCommand=none -o RequestTTY=no pc-master.local \
   '& C:/msys64/usr/bin/bash.exe -lc "uname -s; pwd; command -v git"'
 ```
 
-The PowerShell `&` call operator is required. MSYS2 resolves its home directory as `/home/nizar`.
+The PowerShell `&` call operator is required.
+
+⚠️ **Do not hardcode a POSIX home path in these commands.** MSYS2's home directory
+depends on which shell mode is running, and both spellings resolve to the same
+Windows profile:
+
+| Shell mode | `$HOME` |
+|---|---|
+| MSYS mode (`msys2.exe`; also the zsh that `bash --login` execs) | `/home/nizar` |
+| MINGW64 mode (`mingw64.exe`, `MSYSTEM=MINGW64`) | `/c/Users/nizar` |
+
+Both are `C:\Users\nizar` — `cygpath -w "$HOME"` agrees and the inodes match, so they
+are the same directory. But they are **not** interchangeable: in MINGW64 mode `/home`
+does not exist at all, so a literal `/home/nizar` silently refers to nothing. Use
+`$HOME`, or the Windows path.
+
+Separately, `C:\msys64\home\<user>` (the MSYS2 root's own home) is a different
+directory again, reachable only by full path — it is not the user profile.
 
 > **Important:** Windows OpenSSH on PC Master does not execute a configured remote command when a TTY is allocated; it opens `conhost` and closes instead. Therefore, do **not** add an interactive MSYS2 SSH alias with `RemoteCommand` and `RequestTTY yes`. It will not work. Use the normal PowerShell alias (`ssh pc-master.local`) for interactive work, and invoke MSYS2 explicitly only for non-interactive commands.
 
