@@ -152,16 +152,44 @@ if [ $# -eq 0 ]; then
   exit 0
 fi
 
-# Pull on each remote host, then refresh that host's skill venvs
+# Pull on each remote host, then refresh that host's skill venvs.
+#
+# ControlMaster/ControlPath are disabled deliberately. A stale master socket (the
+# host rebooted, or the link dropped, while ~/.ssh/master-* survived) otherwise
+# fails the deploy with "mux_client_request_session: read from master failed" or
+# "Failed to connect to new control master" even though the host is perfectly
+# reachable. One short-lived connection per host is cheap and cannot be poisoned
+# by a leftover socket; it is also the only form that works when the remote sshd
+# closes connections abruptly.
+SSH_OPTS=(
+  -o RemoteCommand=none
+  -o RequestTTY=no
+  -o ControlMaster=no
+  -o ControlPath=none
+  -o ConnectTimeout=15
+)
+
+failed_hosts=()
 for HOST in "$@"; do
   echo ""
   echo "🌐 Pulling on $HOST..."
-  ssh -o RemoteCommand=none -o RequestTTY=no "$HOST" \
-    "cd ~/.agents/skills && git pull && ./uv-sync-all.sh"
-  echo "✅ $HOST updated"
+  # `if` (not `&&`) so one unreachable host does not abort the whole deploy and
+  # strand the hosts listed after it.
+  if ssh "${SSH_OPTS[@]}" "$HOST" "cd ~/.agents/skills && git pull && ./uv-sync-all.sh"; then
+    echo "✅ $HOST updated"
+  else
+    echo "❌ $HOST FAILED — continuing with the remaining hosts"
+    failed_hosts+=("$HOST")
+  fi
 done
 
 echo ""
+if [ "${#failed_hosts[@]}" -gt 0 ]; then
+  echo "⚠️  ${#failed_hosts[@]} host(s) failed: ${failed_hosts[*]}"
+  echo "   Re-run just those:  ./deploy.sh ${failed_hosts[*]}"
+  exit 1
+fi
+
 echo "🎉 All done!"
 echo ""
 echo "📌 Remember: each machine needs its own ~/.pi/agent/.env with secrets."
