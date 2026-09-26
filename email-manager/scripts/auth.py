@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-"""Gmail API OAuth2 credentials stored only in native OS credential stores.
+"""Gmail API OAuth2 credentials and their platform-specific stores.
 
-Run ``python3 scripts/auth.py --migrate`` once to import existing local OAuth
-files into the native store. The migration deletes those files only after both
-credential-store writes succeed.
+Store selection:
+  - macOS  : Keychain (``keyring``)
+  - Linux  : Secret Service via ``secret-tool``
+  - Windows: a plain file, ``token.gmail.json`` next to this script
+
+Windows never touches Credential Manager: sandboxed and non-interactive
+sessions cannot reach it (``WinError 1312``), so the refresh token always lives
+in the gitignored file store. On macOS/Linux, ``python3 scripts/auth.py
+--migrate`` imports legacy local OAuth files into the native store.
 """
 
 from __future__ import annotations
@@ -87,7 +93,7 @@ def _ensure_skill_venv() -> None:
 _force_utf8_stdio()
 _ensure_skill_venv()
 
-if sys.platform in {"darwin", "win32"}:
+if sys.platform == "darwin":
     try:
         import keyring
         from keyring.errors import KeyringError
@@ -97,6 +103,7 @@ if sys.platform in {"darwin", "win32"}:
             f"{SKILL_DIR} to create the skill venv from pyproject.toml."
         ) from error
 
+from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -106,10 +113,11 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 LEGACY_CLIENT_FILE = SKILL_DIR / "credentials.gmail.json"
 LEGACY_TOKEN_FILE = SKILL_DIR / "token.gmail.json"
 
-# Point the skill at a file-based token store instead of the OS credential
-# store. Required for environments whose process has no interactive logon
-# session (Credential Manager then fails with WinError 1312 on write):
-#   set PI_EMAIL_MANAGER_TOKEN_FILE=C:\path\to\token.gmail.json
+# Opt into a file-based token store instead of the OS credential store. This
+# is the only store on Windows (Credential Manager fails with WinError 1312 for
+# processes without an interactive logon session) and is always used there; on
+# macOS/Linux it is opt-in:
+#   set PI_EMAIL_MANAGER_TOKEN_FILE=/path/to/token.gmail.json
 TOKEN_FILE_ENV = "PI_EMAIL_MANAGER_TOKEN_FILE"
 
 
@@ -141,12 +149,28 @@ def _systemd_credential_path(account: str) -> Path | None:
     return path if path.is_file() else None
 
 
+def _file_secret_path(account: str) -> Path | None:
+    """File backing the store for ``account`` on Windows."""
+    if account == TOKEN_ACCOUNT:
+        return LEGACY_TOKEN_FILE
+    if account == CLIENT_ACCOUNT:
+        return LEGACY_CLIENT_FILE
+    return None
+
+
 def _get_secret(account: str) -> str | None:
     systemd_path = _systemd_credential_path(account)
     if systemd_path:
         return systemd_path.read_text(encoding="utf-8")
 
-    if sys.platform in {"darwin", "win32"}:
+    if sys.platform == "win32":
+        # Windows Credential Manager is deliberately not used: non-interactive
+        # and sandboxed sessions cannot reach it (WinError 1312), so the file
+        # store is the only store there.
+        path = _file_secret_path(account)
+        return path.read_text(encoding="utf-8") if path and path.is_file() else None
+
+    if sys.platform == "darwin":
         try:
             return keyring.get_password(KEYRING_SERVICE, account)
         except KeyringError as error:
@@ -173,17 +197,27 @@ def _store_hint(error: OSError) -> str:
 
 
 def _token_file() -> Path | None:
-    """File-based token store, if the environment opted into one."""
+    """Return the file-based token store, if one applies.
+
+    Windows always uses the file store (Credential Manager is unusable from
+    sandboxed/non-interactive sessions, WinError 1312). Elsewhere the file
+    store is used only when ``PI_EMAIL_MANAGER_TOKEN_FILE`` is set.
+    """
     value = os.environ.get(TOKEN_FILE_ENV, "").strip()
-    return Path(value).expanduser() if value else None
+    if value:
+        return Path(value).expanduser()
+    if sys.platform == "win32":
+        return LEGACY_TOKEN_FILE
+    return None
 
 
 def _write_token_file(path: Path, creds: Credentials) -> None:
     """Persist credentials to a file, inheriting the directory's permissions.
 
-    Deliberately does not create a restrictive DACL on Windows: the whole point
-    of this store is that another account (a sandboxed agent) can read it. On
-    POSIX the file is chmod 0600.
+    This is the primary credential store on Windows, so it deliberately does not
+    create a restrictive DACL there: the directory's inherited permissions let a
+    sandboxed agent or service account read it too. On POSIX the file is
+    chmod 0600.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(creds.to_json(), encoding="utf-8")
@@ -231,7 +265,18 @@ def _set_secret(account: str, value: str) -> None:
     if _systemd_credential_path(account):
         raise CredentialStoreError("Systemd-encrypted credentials are read-only at runtime.")
 
-    if sys.platform in {"darwin", "win32"}:
+    if sys.platform == "win32":
+        path = _file_secret_path(account)
+        if path is None:
+            raise CredentialStoreError(f"No file store is defined for account '{account}'.")
+        path.write_text(value, encoding="utf-8")
+        try:
+            os.chmod(path, 0o600)  # POSIX-only; on Windows the DACL is inherited
+        except OSError:
+            pass
+        return
+
+    if sys.platform == "darwin":
         try:
             keyring.set_password(KEYRING_SERVICE, account, value)
         except KeyringError as error:
@@ -259,11 +304,6 @@ def _set_secret(account: str, value: str) -> None:
 
 def _load_json_secret(account: str) -> dict:
     value = _get_secret(account)
-    # A desktop OAuth client configuration is not confidential. On Windows, keep
-    # it in the ignored local skill file while the refresh token stays in
-    # Windows Credential Manager.
-    if not value and account == CLIENT_ACCOUNT and sys.platform == "win32" and LEGACY_CLIENT_FILE.is_file():
-        value = LEGACY_CLIENT_FILE.read_text(encoding="utf-8")
     if not value:
         raise CredentialStoreError("Gmail OAuth configuration is not available.")
     try:
@@ -274,7 +314,10 @@ def _load_json_secret(account: str) -> dict:
 
 def migrate_legacy_files() -> bool:
     """Move legacy local OAuth files into the native credential store safely."""
-    sources = ((TOKEN_ACCOUNT, LEGACY_TOKEN_FILE),) if sys.platform == "win32" else (
+    if sys.platform == "win32":
+        # The file store already *is* the store on Windows; nothing to migrate.
+        return False
+    sources = (
         (CLIENT_ACCOUNT, LEGACY_CLIENT_FILE),
         (TOKEN_ACCOUNT, LEGACY_TOKEN_FILE),
     )
@@ -351,9 +394,31 @@ def get_account_email(service) -> str:
     return service.users().getProfile(userId="me").execute().get("emailAddress", "unknown@unknown.com")
 
 
+def _report_refresh_failure() -> int:
+    print(
+        "The refresh token was rejected (invalid_grant): it has been revoked or expired.",
+        file=sys.stderr,
+    )
+    print("Run 'python3 scripts/auth.py' to authenticate again.", file=sys.stderr)
+    return 1
+
+
 def _check() -> int:
+    """Verify the credentials and report the authenticated address.
+
+    Loads the stored credentials, then resolves the mailbox with
+    ``users.getProfile`` so the printed address is the account's Google
+    **primary** address. A send-as alias that merely delivers to the same inbox
+    is never returned. Exit 0 therefore means the credentials work against the
+    Gmail API; 1 means the refresh token is missing, rejected, or the API could
+    not be reached.
+    """
+    store = "file token store" if _token_file() is not None else "native credential storage"
+
     try:
         get_credentials()
+    except RefreshError:
+        return _report_refresh_failure()
     except CredentialStoreError as error:
         print(f"Authentication unavailable: {error}", file=sys.stderr)
         print("Run 'python3 scripts/auth.py --diagnose' for details.", file=sys.stderr)
@@ -362,10 +427,24 @@ def _check() -> int:
         print("Authentication unavailable.", file=sys.stderr)
         print("Run 'python3 scripts/auth.py --diagnose' for details.", file=sys.stderr)
         return 1
-    if _token_file() is not None:
-        print("Authenticated using the file token store.")
-    else:
-        print("Authenticated with native credential storage.")
+
+    try:
+        account_email = get_account_email(get_service())
+    except RefreshError:
+        return _report_refresh_failure()
+    except Exception as error:
+        print(
+            f"Credentials present, but the Gmail API profile lookup failed: {error}",
+            file=sys.stderr,
+        )
+        print(
+            "Usually a network/DNS problem or an expired access token; retry, then "
+            "run 'python3 scripts/auth.py --diagnose' if it persists.",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(f"Authenticated as {account_email} using the {store}.")
     return 0
 
 
@@ -390,26 +469,29 @@ def _diagnose() -> int:
     print(f"OS user             : {os.environ.get('USERNAME') or os.environ.get('USER', '?')}")
     print(f"skill dir           : {SKILL_DIR}")
 
-    if sys.platform in {"darwin", "win32"}:
+    if sys.platform == "darwin":
         try:
             import keyring
 
             print(f"credential store    : keyring -> {keyring.get_keyring()}")
         except ImportError:
             print("credential store    : keyring NOT INSTALLED (run: uv sync)")
+    elif sys.platform == "win32":
+        print("credential store    : file store (token.gmail.json)")
     else:
         print("credential store    : secret-tool / Secret Service")
 
     token_value = None
     file_token = _token_file()
     if file_token is not None:
+        source = "default" if sys.platform == "win32" and not os.environ.get(TOKEN_FILE_ENV) else "env"
         state = "present" if file_token.is_file() else "ABSENT"
-        print(f"token file (env)    : {file_token} ({state})")
+        print(f"token file ({source:<7}) : {file_token} ({state})")
         if file_token.is_file():
             try:
                 token_value = file_token.read_text(encoding="utf-8")
                 json.loads(token_value)
-                print(f"{'':<20}  valid JSON, takes precedence over the vault")
+                print(f"{'':<20}  valid JSON, in use")
             except (OSError, json.JSONDecodeError) as error:
                 print(f"{'':<20}  unreadable: {error}")
                 token_value = None
@@ -417,8 +499,8 @@ def _diagnose() -> int:
         print(f"token file (env)    : not set ({TOKEN_FILE_ENV})")
 
     for account, label in (
-        (CLIENT_ACCOUNT, "vault client-config"),
-        (TOKEN_ACCOUNT, "vault refresh-token"),
+        (CLIENT_ACCOUNT, "client-config"),
+        (TOKEN_ACCOUNT, "refresh-token"),
     ):
         try:
             value = _get_secret(account)
@@ -449,16 +531,21 @@ def _diagnose() -> int:
     if not token_value:
         print("RESULT: no refresh token available to this process.")
         if file_token is not None and not file_token.is_file():
-            print(f"        {TOKEN_FILE_ENV} is set but {file_token} does not exist.")
+            print(f"        Expected token file is missing: {file_token}")
             print("        Create it on an authenticated machine with:")
             print("          python scripts/auth.py --export <path>")
+            print("        ...or run 'python3 scripts/auth.py' interactively once.")
         elif client_ok:
             print("        The OAuth client config IS available, so the next auth attempt")
             print("        starts an INTERACTIVE browser consent, which fails in headless")
             print("        or sandboxed agents. Provision this account/machine:")
-            print("          - copy an existing token.gmail.json here, then run")
-            print("            python3 scripts/auth.py --migrate")
-            print("          - or run 'python3 scripts/auth.py' interactively once")
+            if sys.platform == "win32":
+                print("          - copy an existing token.gmail.json into this skill dir")
+                print("          - or run 'python3 scripts/auth.py' interactively once")
+            else:
+                print("          - copy an existing token.gmail.json here, then run")
+                print("            python3 scripts/auth.py --migrate")
+                print("          - or run 'python3 scripts/auth.py' interactively once")
         else:
             print("        The OAuth client config is ALSO missing here, so authentication")
             print("        cannot even be started. Copy credentials.gmail.json to this")
@@ -496,7 +583,7 @@ def _export(destination: str) -> int:
     """Write the stored OAuth credentials to a file, to provision another host.
 
     The file contains a refresh token, so it is a secret: transfer it over a
-    trusted channel, import it with ``--migrate`` on the target, then delete it.
+    trusted channel, place/import it on the target, then delete it.
     """
     target = Path(destination).expanduser()
     if target.exists():
@@ -527,13 +614,17 @@ def _export(destination: str) -> int:
     print(f"Exported credentials to: {target}")
     print("This file holds a refresh token for the Gmail modify scope:", file=sys.stderr)
     print("  - transfer it over a trusted channel only", file=sys.stderr)
-    print("  - import on the target host: python3 scripts/auth.py --migrate", file=sys.stderr)
+    print("  - place it as token.gmail.json on the target (Windows) or import it", file=sys.stderr)
+    print("    with 'python3 scripts/auth.py --migrate' (macOS/Linux)", file=sys.stderr)
     print("  - delete it afterwards (token.gmail.json is gitignored)", file=sys.stderr)
     return 0
 
 
 def main(argv: list[str]) -> int:
     if "--migrate" in argv:
+        if sys.platform == "win32":
+            print("Windows stores Gmail credentials in token.gmail.json; nothing to migrate.")
+            return 0
         try:
             migrated = migrate_legacy_files()
         except (CredentialStoreError, OSError, json.JSONDecodeError):
@@ -559,7 +650,7 @@ def main(argv: list[str]) -> int:
 
     try:
         service = get_service()
-        print(f"Authenticated as {get_account_email(service)} using native credential storage.")
+        print(f"Authenticated as {get_account_email(service)}.")
     except CredentialStoreError as error:
         print(f"Authentication unavailable: {error}", file=sys.stderr)
         return 1

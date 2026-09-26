@@ -8,9 +8,9 @@ dependencies = [
     "google-auth>=2.0",
     "google-auth-oauthlib>=1.0",
     "google-api-python-client>=2.0",
-    # Native OS credential store (macOS Keychain / Windows Credential Manager).
-    # Linux uses the system secret-tool instead, so keyring is not needed there.
-    "keyring>=25.0; sys_platform == 'darwin' or sys_platform == 'win32'",
+    # macOS Keychain. Linux uses the system secret-tool and Windows uses a
+    # plain file store, so keyring is not needed on those platforms.
+    "keyring>=25.0; sys_platform == 'darwin'",
 ]
 
 # The skill is a collection of scripts, not an installable package: nothing is

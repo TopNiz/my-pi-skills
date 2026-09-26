@@ -41,13 +41,16 @@ No passwords are stored or needed.
 ~/.agents/skills/email-manager/credentials.gmail.json
 ```
 
-6. Create the skill environment with **uv** (dependencies are declared in `pyproject.toml`) and store refresh tokens in the native OS credential store:
+6. Create the skill environment with **uv** (dependencies are declared in `pyproject.toml`):
 
 ```bash
 cd ~/.agents/skills/email-manager
 uv sync                        # creates .venv from pyproject.toml + uv.lock
-python3 scripts/auth.py --migrate
 ```
+
+Refresh-token storage is platform-specific: macOS uses the Keychain, Linux the Secret
+Service, and Windows a plain file (`token.gmail.json`). The `auth.py --migrate` command only
+applies to macOS/Linux, where it imports legacy local OAuth files into the native store.
 
 > ⚠️ **Never install these dependencies with `pip install --target .deps`.** On Windows, pip
 > stages wheels in a `mkdtemp()` tree (mode `0o700`) and then `shutil.move`s them into place.
@@ -60,7 +63,10 @@ python3 scripts/auth.py --migrate
 > `auth.py` and `fetch_emails.py` transparently re-exec into `.venv`, so `python3 scripts/...`
 > and `uv run python scripts/...` both work.
 
-On Windows, `credentials.gmail.json` remains as an ignored local OAuth client configuration; the refresh token is stored in Windows Credential Manager.
+On Windows, both files are plain local files: `credentials.gmail.json` holds the OAuth client
+configuration and `token.gmail.json` holds the refresh token. Windows Credential Manager is
+**not** used — non-interactive and sandboxed processes cannot reach it (`WinError 1312`), so
+the file store works everywhere.
 
 7. **OAuth consent screen**: If needed, set to "External" and add your email as a test user
 
@@ -71,7 +77,9 @@ cd ~/.agents/skills/email-manager
 python3 scripts/auth.py
 ```
 
-This opens your browser → click "Allow" → the refresh token is stored in macOS Keychain or Linux Secret Service/GNOME Keyring. No OAuth token file is retained. Done.
+This opens your browser → click "Allow" → on macOS the refresh token goes to the Keychain and
+on Linux to the Secret Service/GNOME Keyring (no token file retained). On Windows it is written
+to `token.gmail.json` in the skill directory. Done.
 
 ### 3. Verify auth
 
@@ -79,12 +87,31 @@ This opens your browser → click "Allow" → the refresh token is stored in mac
 python3 scripts/auth.py --check
 ```
 
+Resolves the mailbox with `users.getProfile`, so it prints the account's Google
+**primary** address — the authoritative answer to "which account is this?":
+
+```
+Authenticated as nizar.ayed@chain-it.com using the file token store.
+```
+
+Exit codes: `0` = credentials work against the Gmail API; `1` = refresh token
+missing, rejected (`invalid_grant`, revoked/expired), or the API was unreachable.
+Because it makes one API call, it is no longer a purely offline check.
+
 ### 4. Troubleshoot: other agents or machines cannot authenticate
 
-Credentials live in the **OS credential store of the account that ran the consent**, plus the
-OAuth client file `credentials.gmail.json` (gitignored → absent on a fresh clone). Both are
-per-account and per-machine, so a second agent or host starts with nothing and drops into an
-interactive browser consent it cannot complete.
+Where credentials live is **per platform**:
+
+| Platform | Refresh token | OAuth client config |
+|---|---|---|
+| Windows | `token.gmail.json` (file, gitignored) | `credentials.gmail.json` (file, gitignored) |
+| macOS | Keychain (`keyring`) | Keychain (imported with `--migrate`) |
+| Linux | Secret Service (`secret-tool`) or systemd credentials | Secret Service or systemd credentials |
+
+Windows needs no OS credential store at all: `auth.py` reads and writes `token.gmail.json`
+directly, so sandboxed agents and services (which cannot use Credential Manager) work without
+`PI_EMAIL_MANAGER_TOKEN_FILE`. The environment variable is only needed on macOS/Linux to opt
+into a file store.
 
 ```bash
 python3 scripts/auth.py --diagnose   # exit 0 usable / 1 needs provisioning; prints no secrets
@@ -97,35 +124,29 @@ python3 scripts/auth.py --diagnose   # exit 0 usable / 1 needs provisioning; pri
 | client config `ABSENT` as well | OAuth cannot even start | copy `credentials.gmail.json` here (it is gitignored), then authenticate |
 | `refresh FAILED: invalid_grant` | token revoked or expired | `python3 scripts/auth.py` |
 
-**`WinError 1312: A specified logon session does not exist`** — the calling process has no
-interactive logon session, so Windows Credential Manager cannot persist anything (`CredWrite`
-fails). Typical for service or sandboxed agents; it is not an ACL problem. Authorization may
-have *succeeded* and the token still could not be saved, so switch that agent to the **file
-token store**:
+**Windows** — because the token is a file, provisioning a machine or agent is just copying it:
 
 ```powershell
-# in your normal interactive terminal (you are already authenticated → no new consent)
-cd %USERPROFILE%\.agents\skills\email-manager
+# from an already-authenticated machine (e.g. via the interactive session)
 python .\scripts\auth.py --export .\token.gmail.json
-
-# then the non-interactive agent runs with:
-set PI_EMAIL_MANAGER_TOKEN_FILE=%USERPROFILE%\.agents\skills\email-manager\token.gmail.json
-python .\scripts\fetch_emails.py scripts\config.json --max=5
+# then copy token.gmail.json into the target skill dir; no env var, no --migrate
 ```
 
-`PI_EMAIL_MANAGER_TOKEN_FILE` takes precedence over the OS credential store and is read *and*
-written, so such an agent can also complete a fresh consent by itself. As a safety net, when a
-vault write fails the token is now kept in `token.gmail.json` (gitignored) instead of being
-discarded, and the import instructions are printed.
+If `auth.py` was run from a **service or sandboxed** session with no interactive desktop, the
+browser consent cannot be completed there. Run consent once in a normal interactive terminal
+(or export `token.gmail.json` from one) and the file store is picked up automatically.
 
-> ⚠️ A token file holds a `gmail.modify` refresh token. It inherits the directory's
-> permissions — that is exactly what lets a sandboxed agent read it. Keep it inside the skill
-> directory (gitignored), and delete it once the agent no longer needs it. To move it into the
-> OS store afterwards: `python scripts/auth.py --migrate` (which deletes the file).
+> ⚠️ A token file holds a `gmail.modify` refresh token. Keep it inside the skill directory
+> (gitignored) and delete it once the agent no longer needs it.
 
-**Provisioning another machine** uses the same recipe: copy `credentials.gmail.json` (it is
-not in Git) and then either run the consent once there, or `--export` here and `--migrate`
-there.
+**macOS / Linux** — `PI_EMAIL_MANAGER_TOKEN_FILE` opts into the same file store and takes
+precedence over the OS credential store; it is read *and* written. To import legacy files into
+the native store, run `python scripts/auth.py --migrate` (on Windows this is a no-op, since the
+file already *is* the store).
+
+**Provisioning another machine:** copy `credentials.gmail.json` (not in Git), then run the
+consent once there. On macOS/Linux you can instead `--export` here and `--migrate` there; on
+Windows just copy `token.gmail.json` across.
 
 ### Always-on Linux machines: systemd-encrypted credentials
 
@@ -133,40 +154,54 @@ For a 24/7 Linux monitor, do not rely on a desktop keyring that may lock when no
 
 Use credential names `gmail-oauth-client` and `gmail-oauth-token`. Generate the encrypted files with `systemd-creds encrypt --user --with-key=host`; encrypt from standard input so secrets never appear in command arguments or terminal output. The `auth.py` helper automatically prefers those runtime credentials and refreshes access tokens in memory.
 
-### 4. Configure your accounts
+### 4. Configure your mailbox
 
-Edit `scripts/config.json` — Gmail API doesn't need IMAP server/port, just filters:
+Edit `scripts/config.json` — the Gmail API needs no IMAP server/port and no
+account block: a mailbox is addressed by `userId="me"`, so the config is **flat
+and account-agnostic**. `scripts/config.template.json` is the canonical shape:
 
 ```json
 {
-  "accounts": {
-    "active": ["user@example.com"],
-    "list": {
-      "user@example.com": {
-        "filters": {
-          "max_emails": 50,
-          "fetch_days_back": 7,
-          "include_seen": false,
-          "folders": ["INBOX"]
-        },
-        "invoices": {
-          "storage_dir": "/path/to/invoices",
-          "auto_extract": true,
-          "save_attachments": true
-        },
-        "protected_senders": {
-          "list": ["noreply@newsletter.com"]
-        },
-        "routing": {
-          "rules": []
-        }
-      }
-    }
+  "filters": {
+    "max_emails": 50,
+    "fetch_days_back": 7,
+    "include_seen": false,
+    "folders": ["INBOX"]
+  },
+  "invoices": {
+    "storage_dir": "~/Invoices",
+    "auto_extract": true,
+    "save_attachments": true
+  },
+  "protected_senders": {
+    "list": ["noreply@newsletter.com"]
+  },
+  "routing": {
+    "rules": []
   }
 }
 ```
 
 **No passwords in config.json** — OAuth2 handles everything.
+
+The account email is deliberately **not** in the config. `fetch_emails.py`
+resolves the mailbox via `users.getProfile(userId="me")`, which returns the
+**primary** address of the authenticated Google account — never a send-as alias
+that merely delivers to the same inbox.
+
+> ⚠️ **Aliases are the same mailbox but not the same address.** If
+> `nizar.ayed@upgrade-code.org` is a send-as alias of the account whose primary
+> is `nizar.ayed@chain-it.com`, mail to either lands in the one inbox, yet the API
+> only ever reports `nizar.ayed@chain-it.com`. So:
+> - Take the account label from the `"account"` field of the `fetch_emails.py`
+>   JSON output. Never infer it from a message's `To:`/`Cc:` header, a reply-to,
+>   or a newsletter's unsubscribe URL — those show whichever alias the sender used.
+> - `--account=<email>` must be the **primary** address; an alias aborts the fetch
+>   with `Authenticated as <primary>, but --account=<alias> requested`. In this
+>   single-mailbox setup, simply omit `--account`.
+> - `python3 scripts/auth.py --check` (and `auth.py` with no flags) resolves the
+>   mailbox with `users.getProfile` and prints `Authenticated as
+>   <primary-address>.`, so the reported address is always the primary one.
 
 ### 5. Customize categories (optional)
 
@@ -213,6 +248,13 @@ python3 scripts/fetch_emails.py scripts/config.json > /tmp/emails.json
 
 Read the fetched emails and categorize each one. Use the taxonomy from `references/CATEGORIES.md`.
 
+**Use the mailbox address from the JSON, not from the messages.** Each account entry in the
+output carries an `"account"` field (e.g. `"account": "nizar.ayed@chain-it.com"`) — that is
+the Google primary address. Render it in the headers below verbatim. Do **not** use the
+address seen in a message's `To:`/`Cc:` header or a newsletter's unsubscribe link: those may
+show a send-as alias of the same mailbox (e.g. `nizar.ayed@upgrade-code.org`) and will
+misreport the account.
+
 **Categorization guidelines:**
 
 For each email, determine:
@@ -230,7 +272,7 @@ For each email, determine:
 ```
 ┌─────────────────────────────────────────────────────┐
 │ 📧 Email Inbox — Categorized Summary               │
-│ Account: user@email.com                             │
+│ Account: <accounts[].account from the JSON>          │
 │ Fetched: 2026-05-14T09:00:00                        │
 │ Total: 12 unread                                    │
 └─────────────────────────────────────────────────────┘
@@ -291,20 +333,13 @@ Then process the JSON and present a **Daily Review** in this format:
 ```
 ┌─────────────────────────────────────────────────────┐
 │ 📋 Daily Review — 2026-05-14                       │
-│ Account: user@email.com                             │
+│ Account: <accounts[].account from the JSON>          │
 └─────────────────────────────────────────────────────┘
 
 📥 RECEIVED TODAY (15 emails)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📧 Account 1: user@example.com (8 emails)
-
-🔴 Priority Items:
-  1. [Subject] — [Sender]
-     → Why it matters, what action is needed
-  ...
-
-📧 Account 2: other@domain.com (7 emails)
+📧 <accounts[].account from the JSON> (15 emails)
 
 🔴 Priority Items:
   1. [Subject] — [Sender]
@@ -436,27 +471,21 @@ service.users().messages().modify(
 ### Protecting Senders
 
 Update `scripts/config.json` whenever the user says "keep" or "don't delete".
-Find the account in `accounts.list.<email>.protected_senders`:
+The lists are top-level (there is no `accounts` wrapper):
 
 ```json
 {
-  "accounts": {
-    "list": {
-      "user@example.com": {
-        "protected_senders": {
-          "list": [
-            "noreply@newsletter.com",
-            "no-reply@tickets.vendor.com",
-            "invoices@provider.com"
-          ]
-        },
-        "routing": {
-          "rules": [
-            {"sender": "invoices@provider.com", "label": "Finance/Invoices"}
-          ]
-        }
-      }
-    }
+  "protected_senders": {
+    "list": [
+      "noreply@newsletter.com",
+      "no-reply@tickets.vendor.com",
+      "invoices@provider.com"
+    ]
+  },
+  "routing": {
+    "rules": [
+      {"sender": "invoices@provider.com", "label": "Finance/Invoices"}
+    ]
   }
 }
 ```
@@ -613,16 +642,16 @@ print(f'Reste INBOX: {remaining}')
 - ❌ **Don't use `datetime.strptime` for email dates** — always use `parsedate_to_datetime`
 - ❌ **Don't unsubscribe if sender is in `protected_senders`**
 - ❌ **Don't use IMAP-specific folder names with Gmail API** — Gmail uses label IDs, not folder paths
-- ❌ **Don't store OAuth tokens in config files or token files** — use the native credential store
+- ❌ **Don't commit or print OAuth tokens** — `token.gmail.json` is a gitignored secret holding the refresh token (always on Windows; on macOS/Linux only when using the file store)
 
 ---
 
 ## 🔐 Security Notes
 
 - **OAuth2** — No passwords stored. Authentication is via Google's OAuth2 flow.
-- **Native credential store** — Refresh tokens are stored in macOS Keychain, Windows Credential Manager, or Linux Secret Service/GNOME Keyring, never committed or printed.
-- **OAuth client configuration** — On Windows, the ignored local `credentials.gmail.json` file is used; other platforms import it into the native credential store.
-- **Temporary migration files** — `token.gmail.json` is imported with `auth.py --migrate` and removed only after a successful native-store write.
+- **Credential storage** — Refresh tokens live in macOS Keychain or Linux Secret Service/GNOME Keyring. On Windows they live in the gitignored `token.gmail.json` file, never committed or printed.
+- **OAuth client configuration** — `credentials.gmail.json` (gitignored) is used directly on Windows; macOS/Linux import it into the native credential store with `auth.py --migrate`.
+- **File token store** — `token.gmail.json` is read/written directly on Windows; on macOS/Linux it is used only when `PI_EMAIL_MANAGER_TOKEN_FILE` is set, and `--migrate` imports it into the native store and removes the file.
 - **Revoke access** at https://myaccount.google.com/permissions anytime.
 - **Invoice storage**: Ensure the invoice directory has appropriate backups.
 - **Scope**: `gmail.modify` — required for reading, deleting, and moving emails.
@@ -637,7 +666,8 @@ email-manager/
 ├── .venv/                      ← uv-managed environment (`uv sync`; gitignored)
 ├── scripts/
 │   ├── config.json             ← Account config (no passwords!)
-│   ├── auth.py                 ← Gmail OAuth2 via the native credential store
+│   ├── config.template.json    ← Canonical flat config shape
+│   ├── auth.py                 ← Gmail OAuth2 (Keychain/Secret Service; file store on Windows)
 │   ├── fetch_emails.py         ← Gmail API email fetcher → JSON
 │   ├── extract_invoices.py     ← Invoice detection & metadata
 │   └── setup.sh                ← One-time interactive setup (legacy)
@@ -656,9 +686,9 @@ uv lock --upgrade        # bump the locked versions
 uv run python scripts/fetch_emails.py scripts/config.json
 ```
 
-`keyring` is only pulled in on macOS/Windows (`sys_platform` marker); Linux uses the system
-`secret-tool`. To add a dependency, edit `pyproject.toml` then run `uv sync` — do **not**
-reintroduce a `--target` directory or a `requirements*.txt` file.
+`keyring` is pulled in on macOS only (`sys_platform` marker); Linux uses the system
+`secret-tool`, and Windows uses the file store. To add a dependency, edit `pyproject.toml`
+then run `uv sync` — do **not** reintroduce a `--target` directory or a `requirements*.txt` file.
 
 ## 🔑 Gmail API vs IMAP — Key Differences
 
@@ -671,6 +701,6 @@ reintroduce a `--target` directory or a `requirements*.txt` file.
 | Move | `COPY` → `STORE +FLAGS (\Deleted)` → expunge | `messages().modify()` → add/remove labelIds |
 | Attachments | Inline in IMAP fetch | `messages().get()` with `format=full` |
 | Rate limits | ~1500 connections/day | 250 quota units/user/sec (generous) |
-| Auth storage | macOS Keychain | Native credential store (OAuth2) |
+| Auth storage | macOS Keychain | Keychain/Secret Service, or file store on Windows (OAuth2) |
 
 > **Note:** The `_gmail_labels` and `thread_id` fields are added to each email in the JSON output for use in Gmail API operations (delete, move, etc.).
