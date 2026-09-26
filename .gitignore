@@ -22,3 +22,8 @@ email-authoring/contacts/
 extract-text/.text_content/
 email-manager/instructions/
 email-manager/invoices/
+
+# PowerPoint skill: third-party template decks are reference material only and
+# must never be committed (see powerpoint/.env.example).
+powerpoint/assets/templates/*.pptx
+powerpoint/assets/templates/*.key

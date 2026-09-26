@@ -1,0 +1,591 @@
+catalog_version: 1
+catalog_title: ESG template layout matching catalog
+# Bare filename, resolved inside POWERPOINT_TEMPLATES_DIR (skill-local .env).
+# The deck itself is not versioned: it is a third-party template that must not be
+# redistributed. Only this catalog and the source_doc files below are committed.
+template_file: ESG Innovation Sustainability PowerPoint Templates.pptx
+slide_count: 48
+
+# Default provenance when adapting a template pattern to a target slide.
+provenance_profile: target_style_template_geometry
+provenance_profiles:
+  target_style_template_geometry:
+    content:
+      source: target_slide_specification
+      policy: preserve_exactly
+    typography:
+      source: target_presentation
+      policy: preserve_existing_font_and_text_treatment
+    palette:
+      source: target_presentation
+      policy: preserve_existing_colors_unless_explicitly_overridden
+    background:
+      source: target_slide_or_target_presentation
+      policy: preserve_existing_background
+    geometry:
+      source: template_slide
+      policy: import_or_adapt_graphical_arrangement_only
+    editable_vectors:
+      source: template_slide
+      policy: import_shapes_and_editable_vector_graphics_only
+    template_text:
+      source: template_slide
+      policy: do_not_import
+    template_logo:
+      source: template_slide
+      policy: do_not_import
+    template_photography:
+      source: template_slide
+      policy: explicit_opt_in_only
+    additional_assets:
+      source: target_assets_or_explicit_request
+      policy: add_only_when_required_or_requested
+
+matching_guidance:
+  primary_fields:
+    - semantic_types
+    - item_count
+    - flow
+    - hierarchy
+    - text_density
+    - geometry
+  selection_order:
+    - match semantic_types
+    - match item_count when relevant
+    - match flow
+    - match hierarchy
+    - check text_density
+    - read source_doc before editing
+  confidence_values:
+    high: Direct match for the slide's communication purpose and structure.
+    medium: Usable adaptation, but the visual metaphor or item count differs.
+    low: Reusable only when the narrative purpose is deliberately changed.
+
+patterns:
+  - id: cover-lightbulb
+    template_slide: 1
+    source_doc: 01-cover-lightbulb.md
+    semantic_types: [cover, opening, innovation_statement]
+    item_count: 0
+    flow: none
+    hierarchy: single_focal_point
+    text_density: low
+    geometry: [full_bleed_photo, dark_footer_band, title_block]
+    best_for: [opening slide, innovation theme, future-oriented message]
+
+  - id: section-break
+    template_slide: 2
+    source_doc: 02-section-break.md
+    semantic_types: [section_divider, chapter_opener, transition]
+    item_count: 0
+    flow: none
+    hierarchy: single_focal_point
+    text_density: very_low
+    geometry: [centered_visual_stack, dark_footer_band, centered_title]
+    best_for: [new presentation part, methodology divider, conclusion divider]
+
+  - id: agenda-bars
+    template_slide: 3
+    source_doc: 03-agenda-bars.md
+    semantic_types: [agenda, roadmap, presentation_structure, priorities]
+    item_count: 4
+    flow: linear
+    hierarchy: equal
+    text_density: low
+    geometry: [stacked_horizontal_bars, numbered_markers, optional_visual_anchor]
+    best_for: [four presentation sections, four priorities, four workstreams]
+
+  - id: roadmap-timeline
+    template_slide: 4
+    source_doc: 04-roadmap-timeline.md
+    semantic_types: [timeline, milestones, roadmap, chronology]
+    item_count: 6
+    flow: chronological
+    hierarchy: equal
+    text_density: low
+    geometry: [vertical_connector, circular_milestones, alternating_rounded_cards]
+    best_for: [annual milestones, implementation phases, multi-year plan]
+
+  - id: team-structure
+    template_slide: 5
+    source_doc: 05-team-structure.md
+    semantic_types: [team, organization, governance, responsibility_model]
+    item_count: 3
+    flow: branching
+    hierarchy: top_down
+    text_density: medium
+    geometry: [central_rounded_card, three_branch_cards, connectors, optional_photo_placeholders]
+    best_for: [team presentation, organization chart, steering committee, role split]
+
+  - id: gear-pillars
+    template_slide: 6
+    source_doc: 06-gear-pillars.md
+    semantic_types: [pillars, capabilities, interdependence, operating_model]
+    item_count: 3
+    flow: interconnected
+    hierarchy: equal
+    text_density: medium
+    geometry: [overlapping_gears, arcs, repeated_content_cards]
+    best_for: [three capabilities, linked workstreams, mutually reinforcing pillars]
+
+  - id: esg-framework
+    template_slide: 7
+    source_doc: 07-esg-framework.md
+    semantic_types: [esg_framework, pillars, overview, stakeholder_dimensions]
+    item_count: 3
+    flow: parallel
+    hierarchy: equal
+    text_density: medium
+    geometry: [large_illustration, stacked_label_bars, aligned_text_panels]
+    best_for: [ESG overview, three dimensions, stakeholder briefing]
+
+  - id: portfolio-teaser
+    template_slide: 8
+    source_doc: 08-portfolio-teaser.md
+    semantic_types: [portfolio, teaser, project_index, placeholder]
+    item_count: 2
+    flow: none
+    hierarchy: split
+    text_density: medium
+    geometry: [large_question_mark, vertical_strip, framed_placeholders, two_column_split]
+    best_for: [portfolio introduction, case-study index, project image placeholders]
+
+  - id: esg-globe
+    template_slide: 9
+    source_doc: 09-esg-globe.md
+    semantic_types: [esg_overview, sustainability, vision, impact_statement]
+    item_count: 3
+    flow: parallel
+    hierarchy: central_focal_point
+    text_density: medium
+    geometry: [central_globe, hands, organic_landscape, stacked_label_blocks]
+    best_for: [ESG vision, sustainability promise, impact overview]
+
+  - id: balance-comparison
+    template_slide: 10
+    source_doc: 10-balance-comparison.md
+    semantic_types: [comparison, tradeoff, balance, alternatives]
+    item_count: 2
+    flow: contrast
+    hierarchy: equal
+    text_density: medium
+    geometry: [balance_scale, two_ribbon_columns, contrasting_illustrations]
+    best_for: [economic versus environmental comparison, options, risks and benefits]
+
+  - id: esg-dashboard
+    template_slide: 11
+    source_doc: 11-esg-dashboard.md
+    semantic_types: [dashboard, ecosystem, integrated_strategy, hub_and_spoke]
+    item_count: 6
+    flow: radial
+    hierarchy: central_focal_point
+    text_density: medium
+    geometry: [concentric_hub, radial_spokes, icon_nodes, translucent_bands]
+    best_for: [integrated ESG strategy, connected initiatives, executive overview]
+
+  - id: impact-metrics
+    template_slide: 12
+    source_doc: 12-impact-metrics.md
+    semantic_types: [metrics, impact, kpi_summary, investment_case]
+    item_count: 3
+    flow: parallel
+    hierarchy: central_focal_point
+    text_density: medium
+    geometry: [globe, layered_landscape, skyline, repeated_metric_cards]
+    best_for: [three headline metrics, financial benefits, sustainability outcomes]
+
+  - id: vision-values
+    template_slide: 13
+    source_doc: 13-vision-values.md
+    semantic_types: [strategy, vision, mission, values, hierarchy]
+    item_count: 3
+    flow: branching
+    hierarchy: top_down
+    text_density: medium
+    geometry: [central_emblem, branching_connectors, three_lower_text_groups]
+    best_for: [strategy architecture, mission and values, principles linked to action]
+
+  - id: portfolio-divider
+    template_slide: 14
+    source_doc: 14-portfolio-divider.md
+    semantic_types: [section_divider, portfolio, transition, reveal]
+    item_count: 0
+    flow: none
+    hierarchy: split
+    text_density: low
+    geometry: [large_question_mark, l_shaped_frame, dark_text_panel]
+    best_for: [case-study divider, portfolio section opener, project reveal]
+
+  - id: three-pillars
+    template_slide: 15
+    source_doc: 15-three-pillars.md
+    semantic_types: [pillars, stakeholders, initiatives, categories]
+    item_count: 3
+    flow: parallel
+    hierarchy: equal
+    text_density: medium
+    geometry: [organic_visual, three_repeated_cards, icon_markers]
+    best_for: [three pillars, stakeholder groups, three program components]
+
+  - id: process-chevron
+    template_slide: 16
+    source_doc: 16-process-chevron.md
+    semantic_types: [process, workflow, lifecycle, sequence]
+    item_count: 4
+    flow: linear
+    hierarchy: equal
+    text_density: medium
+    geometry: [horizontal_chevrons, directional_background_arrow, repeated_text_blocks]
+    best_for: [four-step process, workflow, reporting lifecycle, method]
+
+  - id: hero-message
+    template_slide: 17
+    source_doc: 17-hero-message.md
+    semantic_types: [hero_statement, commitment, executive_message, narrative_transition]
+    item_count: 0
+    flow: none
+    hierarchy: single_focal_point
+    text_density: low
+    geometry: [full_bleed_photo, large_typographic_blocks, quotation_mark]
+    best_for: [sustainability commitment, memorable statement, executive message]
+
+  - id: bar-chart
+    template_slide: 18
+    source_doc: 18-bar-chart.md
+    semantic_types: [comparison, quantitative_analysis, bar_chart, benchmark]
+    item_count: 4
+    flow: comparative
+    hierarchy: equal
+    text_density: medium
+    geometry: [grouped_vertical_bars, baseline, gridlines, commentary_bars]
+    best_for: [category comparison, benchmark, before and after results]
+
+  - id: kpi-donut
+    template_slide: 19
+    source_doc: 19-kpi-donut.md
+    semantic_types: [kpi, percentage, progress, performance_rate]
+    item_count: 3
+    flow: radial
+    hierarchy: central_focal_point
+    text_density: medium
+    geometry: [concentric_circles, donut_segments, radial_markers, callouts]
+    best_for: [progress percentage, completion rate, survey result, KPI narrative]
+
+  - id: mobile-portfolio
+    template_slide: 20
+    source_doc: 20-mobile-portfolio.md
+    semantic_types: [digital_product, mobile, portfolio, modules]
+    item_count: 3
+    flow: parallel
+    hierarchy: split
+    text_density: medium
+    geometry: [overlapping_phone_rectangles, question_mark_typography, icon_units, vertical_rules]
+    best_for: [mobile service, digital product portfolio, three content modules]
+
+  - id: numbered-cards
+    template_slide: 21
+    source_doc: 21-numbered-cards.md
+    semantic_types: [steps, recommendations, checklist, action_plan]
+    item_count: 6
+    flow: linear
+    hierarchy: equal
+    text_density: medium
+    geometry: [two_column_grid, rounded_parallelogram_cards, oversized_numerals]
+    best_for: [six recommendations, six actions, checklist, six-stage method]
+
+  - id: growth-path
+    template_slide: 22
+    source_doc: 22-growth-path.md
+    semantic_types: [maturity_model, growth, roadmap, capability_development]
+    item_count: 3
+    flow: ascending
+    hierarchy: central_focal_point
+    text_density: medium
+    geometry: [horizontal_bands, central_upward_arrow, circular_icon_containers]
+    best_for: [three maturity levels, capability growth, staged development]
+
+  - id: digital-esg
+    template_slide: 23
+    source_doc: 23-digital-esg.md
+    semantic_types: [digital_transformation, esg, case_study, capabilities]
+    item_count: 3
+    flow: vertical_sequence
+    hierarchy: split
+    text_density: medium
+    geometry: [full_bleed_photo, vertical_circle_rail, text_column]
+    best_for: [digital ESG case study, three digital capabilities, technology narrative]
+
+  - id: step-arrows
+    template_slide: 24
+    source_doc: 24-step-arrows.md
+    semantic_types: [roadmap, maturity_model, action_plan, sequence]
+    item_count: 3
+    flow: ascending
+    hierarchy: equal
+    text_density: medium
+    geometry: [ascending_arrows, overlaid_chevrons, bordered_callouts, dotted_connectors]
+    best_for: [three-step plan, staged implementation, increasing maturity]
+
+  - id: kpi-table
+    template_slide: 25
+    source_doc: 25-kpi-table.md
+    semantic_types: [dashboard, scorecard, kpi, table, audit_summary]
+    item_count: 2
+    flow: parallel
+    hierarchy: split
+    text_density: high
+    geometry: [progress_bars, percentage_labels, table_grid, bottom_callout]
+    best_for: [executive dashboard, scorecard, KPI plus detailed evidence]
+
+  - id: esg-identity
+    template_slide: 26
+    source_doc: 26-esg-identity.md
+    semantic_types: [concept, identity, title_slide, classification]
+    item_count: 3
+    flow: none
+    hierarchy: single_focal_point
+    text_density: medium
+    geometry: [segmented_vertical_panels, oversized_display_form, category_tags]
+    best_for: [conceptual title, brand statement, three-format classification]
+
+  - id: content-stack
+    template_slide: 27
+    source_doc: 27-content-stack.md
+    semantic_types: [layers, architecture, hierarchy, workstreams]
+    item_count: 4
+    flow: ascending
+    hierarchy: layered
+    text_density: medium
+    geometry: [vertical_arrow_pillar, stacked_ribbon_blocks, dotted_mapping_lines]
+    best_for: [four-layer model, portfolio architecture, workstream stack]
+
+  - id: radial-wheel
+    template_slide: 28
+    source_doc: 28-radial-wheel.md
+    semantic_types: [ecosystem, holistic_framework, cycle, factors]
+    item_count: 6
+    flow: radial
+    hierarchy: central_focal_point
+    text_density: medium
+    geometry: [central_gear, six_donut_sectors, separator_gaps, radial_callouts]
+    best_for: [six-factor model, ecosystem, operating model, holistic assessment]
+
+  - id: globe-portfolio
+    template_slide: 29
+    source_doc: 29-globe-portfolio.md
+    semantic_types: [portfolio, cover, sustainability, proposition]
+    item_count: 6
+    flow: none
+    hierarchy: central_focal_point
+    text_density: low
+    geometry: [full_bleed_photo, centered_globe, mirrored_side_columns]
+    best_for: [portfolio cover, sustainability proposition, project catalogue opener]
+
+  - id: swot-wheel
+    template_slide: 30
+    source_doc: 30-swot-wheel.md
+    semantic_types: [swot, strategic_diagnosis, risk_scan, four_quadrants]
+    item_count: 4
+    flow: radial
+    hierarchy: central_focal_point
+    text_density: medium
+    geometry: [four_rounded_quadrants, quarter_rings, central_circle]
+    best_for: [SWOT analysis, ESG risk scan, four-part strategic assessment]
+
+  - id: stacked-bars
+    template_slide: 31
+    source_doc: 31-stacked-bars.md
+    semantic_types: [composition, allocation, portfolio_mix, quantitative_analysis]
+    item_count: 3
+    flow: comparative
+    hierarchy: equal
+    text_density: high
+    geometry: [stacked_vertical_bars, percentage_labels, table_blocks, gridlines]
+    best_for: [budget allocation, emissions mix, resource distribution, scenario composition]
+
+  - id: laptop-framework
+    template_slide: 32
+    source_doc: 32-laptop-framework.md
+    semantic_types: [digital_platform, modules, esg, information_system]
+    item_count: 3
+    flow: parallel
+    hierarchy: split
+    text_density: medium
+    geometry: [vertical_split, laptop_illustration, icon_rows, dark_text_panel]
+    best_for: [digital platform, ESG modules, information-system overview]
+
+  - id: triangle-pillars
+    template_slide: 33
+    source_doc: 33-triangle-pillars.md
+    semantic_types: [pillars, triangle_model, balance, interdependence]
+    item_count: 3
+    flow: interconnected
+    hierarchy: equal
+    text_density: medium
+    geometry: [divided_triangle, white_separators, centered_meeting_point, surrounding_callouts]
+    best_for: [three-pillar model, stable framework, mutually dependent factors]
+
+  - id: ribbon-columns
+    template_slide: 34
+    source_doc: 34-ribbon-columns.md
+    semantic_types: [parallel_initiatives, service_lines, channels, categories]
+    item_count: 4
+    flow: parallel
+    hierarchy: equal
+    text_density: medium
+    geometry: [four_vertical_panels, angled_ribbons, folded_tails, bottom_icons]
+    best_for: [four initiatives, service lines, communication channels]
+
+  - id: esg-cubes
+    template_slide: 35
+    source_doc: 35-esg-cubes.md
+    semantic_types: [assembly, modularity, esg, capability_building]
+    item_count: 3
+    flow: sequential
+    hierarchy: central_focal_point
+    text_density: low
+    geometry: [cube_blocks, horizontal_row, hand_action_cue, dark_photo]
+    best_for: [building a strategy, adding capabilities, modular portfolio]
+
+  - id: balanced-framework
+    template_slide: 36
+    source_doc: 36-balanced-framework.md
+    semantic_types: [two_axis_model, decision_framework, balance, consequences]
+    item_count: 4
+    flow: four_directional
+    hierarchy: central_focal_point
+    text_density: medium
+    geometry: [central_rounded_square, four_directional_arrows, opposing_colors]
+    best_for: [two-axis model, central decision, balanced scorecard, four consequences]
+
+  - id: semicircle-metrics
+    template_slide: 37
+    source_doc: 37-semicircle-metrics.md
+    semantic_types: [ratios, percentage_split, comparative_kpi, allocation]
+    item_count: 3
+    flow: comparative
+    hierarchy: equal
+    text_density: medium
+    geometry: [three_semicircular_gauges, half_donuts, percentage_labels, captions]
+    best_for: [three ratio KPIs, stakeholder splits, portfolio allocation]
+
+  - id: portfolio-intro
+    template_slide: 38
+    source_doc: 38-portfolio-intro.md
+    semantic_types: [portfolio, section_opener, placeholder, transition]
+    item_count: 0
+    flow: none
+    hierarchy: split
+    text_density: low
+    geometry: [pale_placeholder_rectangles, oversized_question_marks, sparse_text_area]
+    best_for: [quiet portfolio opener, project visual placeholder, transition]
+
+  - id: priority-diamond
+    template_slide: 39
+    source_doc: 39-priority-diamond.md
+    semantic_types: [priorities, enablers, compass_model, strategic_objective]
+    item_count: 4
+    flow: radial
+    hierarchy: central_focal_point
+    text_density: medium
+    geometry: [central_diamond, four_outer_diamonds, connectors, callouts]
+    best_for: [four strategic priorities, central objective with enablers]
+
+  - id: growth-tree
+    template_slide: 40
+    source_doc: 40-growth-tree.md
+    semantic_types: [growth, sustainability, roots_and_branches, development]
+    item_count: 2
+    flow: branching
+    hierarchy: central_focal_point
+    text_density: medium
+    geometry: [organic_tree, clustered_leaves, split_trunk, side_callouts]
+    best_for: [organizational growth, shared foundation, two branches from one root]
+
+  - id: dark-columns
+    template_slide: 41
+    source_doc: 41-dark-columns.md
+    semantic_types: [narrative, case_study, text_heavy, image_and_text]
+    item_count: 1
+    flow: none
+    hierarchy: split
+    text_density: high
+    geometry: [vertical_column_split, translucent_text_panel, circular_icon]
+    best_for: [text-heavy case study, executive statement, image-supported explanation]
+
+  - id: columns-quote
+    template_slide: 42
+    source_doc: 42-columns-quote.md
+    semantic_types: [comparison, parallel_narrative, quote, evidence_and_recommendation]
+    item_count: 2
+    flow: parallel
+    hierarchy: split
+    text_density: high
+    geometry: [two_text_columns, color_accents, quote_mark, quote_area]
+    best_for: [two approaches, two workstreams, evidence plus recommendation]
+
+  - id: thank-you
+    template_slide: 43
+    source_doc: 43-thank-you.md
+    semantic_types: [closing, thank_you, conclusion, contact_transition]
+    item_count: 0
+    flow: none
+    hierarchy: single_focal_point
+    text_density: very_low
+    geometry: [full_bleed_photo, centered_text_block, negative_space]
+    best_for: [final slide, closing statement, contact transition]
+
+  - id: illustration-assets
+    template_slide: 44
+    source_doc: 44-illustration-assets.md
+    semantic_types: [asset_library, illustration_library, reusable_visuals]
+    item_count: 0
+    flow: none
+    hierarchy: collection
+    text_density: very_low
+    geometry: [asset_board, grouped_vectors, organic_shapes, transparent_background]
+    best_for: [custom ESG diagrams, reusable illustrations, visual assembly]
+
+  - id: editable-graphics
+    template_slide: 45
+    source_doc: 45-editable-graphics.md
+    semantic_types: [asset_library, illustration_library, reusable_visuals, digital_graphics]
+    item_count: 0
+    flow: none
+    hierarchy: collection
+    text_density: very_low
+    geometry: [asset_board, grouped_illustrations, device_shapes, icon_clusters]
+    best_for: [custom covers, digital transformation slides, ESG frameworks]
+
+  - id: icon-set-a
+    template_slide: 46
+    source_doc: 46-icon-set-a.md
+    semantic_types: [icon_library, general_icons, dashboard_icons, communication_icons]
+    item_count: 5
+    flow: none
+    hierarchy: collection
+    text_density: low
+    geometry: [five_icon_rows, monochrome_vectors, color_categories, instruction_panel]
+    best_for: [dashboards, process markers, KPIs, section labels]
+
+  - id: icon-set-b
+    template_slide: 47
+    source_doc: 47-icon-set-b.md
+    semantic_types: [icon_library, health_icons, social_impact, specialized_icons]
+    item_count: 5
+    flow: none
+    hierarchy: collection
+    text_density: low
+    geometry: [five_icon_rows, monochrome_vectors, color_categories, instruction_panel]
+    best_for: [health, wellbeing, social impact, specialized ESG symbols]
+
+  - id: icon-set-c
+    template_slide: 48
+    source_doc: 48-icon-set-c.md
+    semantic_types: [icon_library, general_icons, digital_icons, risk_icons]
+    item_count: 5
+    flow: none
+    hierarchy: collection
+    text_density: low
+    geometry: [five_icon_rows, monochrome_vectors, color_categories, instruction_panel]
+    best_for: [service blueprints, risk maps, digital products, general labels]
