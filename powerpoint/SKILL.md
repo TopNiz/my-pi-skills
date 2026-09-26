@@ -10,6 +10,14 @@ Use this skill when a presentation must be filled **using its existing design**,
 
 The presentation's slide layouts are the source of truth. Treat their placeholders, inherited text styles, bullets, colors, spacing, and geometry as part of the user's design system.
 
+## Environment
+
+```bash
+uv sync        # builds .venv from pyproject.toml (python-pptx)
+```
+
+Run the helper scripts with that interpreter (`uv run python scripts/build_from_template.py ...`), or with any Python 3 that has `python-pptx` installed.
+
 ## Non-negotiable rules
 
 1. **Inspect before editing.** Enumerate the presentation's layouts, names, placeholder indices, placeholder types, and positions before adding content.
@@ -32,7 +40,7 @@ cp .env.example .env      # then set POWERPOINT_TEMPLATES_DIR
 ```
 
 ```ini
-POWERPOINT_TEMPLATES_DIR=~/Documents/Templates
+POWERPOINT_TEMPLATES_DIR=~/MyDocuments/Templates
 ```
 
 `.env` is gitignored; `.env.example` documents the variable. `--templates-dir`
