@@ -239,8 +239,10 @@ To also update one or more remote machines:
 8. If hostnames were provided as arguments, SSHes into each host and runs:
 
    ```bash
-   cd ~/.agents/skills && git pull
+   cd ~/.agents/skills && git pull && ./uv-sync-all.sh
    ```
+
+   One failing host does not abort the run: the script continues with the remaining hosts, then reports the failures with a re-run command and exits non-zero.
 
 9. Prints a reminder that every machine needs its own local secrets file.
 
@@ -254,7 +256,8 @@ To also update one or more remote machines:
 - Each remote host must already have this repository cloned at `~/.agents/skills`.
 - Each remote host must have Git installed and SSH access configured.
 - Each remote host must manage its own `~/.pi/agent/.env` and other machine-local configs.
-- The SSH command uses `RemoteCommand=none` and `RequestTTY=no`, so it is intended for non-interactive pulls.
+- The SSH command uses `RemoteCommand=none`, `RequestTTY=no`, `ControlMaster=no`, `ControlPath=none` and `ConnectTimeout=15`, so it is intended for non-interactive pulls. Multiplexing is switched off deliberately: a persistent master whose underlying connection has died (the host rebooted, or the link dropped) otherwise fails the deploy with `mux_client_request_session: read from master failed` or `Failed to connect to new control master`, even though the host is reachable and the same command succeeds with `-o ControlMaster=no`.
+- A host that fails is reported and skipped; the deploy continues with the rest and exits non-zero, listing the failed hosts so they can be retried with `./deploy.sh <host>...`.
 
 First-time setup on a remote host typically looks like:
 
