@@ -1,7 +1,7 @@
 ---
 name: web-search
 description: Perform advanced web searches using browser automation (Playwright). Search Google, DuckDuckGo, and other engines, extract structured results, and scrape page content.
-allowed-tools: Bash(playwright-cli:*) Bash(npx:*)
+allowed-tools: Bash(playwright-cli:*) Bash(npx:*) Bash(ps:*) Bash(kill:*) Bash(python3:*)
 ---
 
 # Web Search with Playwright
@@ -15,6 +15,19 @@ allowed-tools: Bash(playwright-cli:*) Bash(npx:*)
 5. **If results are unexpected, STOP and investigate.** Don't blindly continue. Check the page content, check for captchas, check if selectors still match.
 6. **If stuck after 2-3 attempts, ask the user.** They can see the headed browser window and help resolve captchas, selectors, or site-specific issues.
 7. **Preserve the workspace session.** Leave the selected persistent workspace session open. Close it only when the user explicitly identifies that session and asks to close it; never close outside/ambiguous sessions.
+
+## Orphan Playwright process termination
+
+When the user explicitly instructs termination of orphan browser processes, process termination is allowed only for browser trees initiated by `playwright-cli`.
+
+1. Inspect `playwright-cli list` and the OS process table first.
+2. List the exact root PIDs, child PIDs, executable paths, and parent-child relationships to the user. Do not print command arguments that may contain URLs, cookies, tokens, or other sensitive data.
+3. Ask the user to confirm that exact identified process list before sending signals, unless the user has already clearly confirmed that identified list in the current request.
+4. Terminate only the confirmed Playwright-initiated browser trees. Do not terminate Safari, Chrome, Vivaldi, Electron, system WebKit helpers, Chrome Remote Desktop, or unrelated browser processes merely because their names contain browser-related text.
+5. Send `SIGTERM` to the confirmed tree, verify which PIDs remain, and report the result. Use `SIGKILL` only when explicitly authorized or when the user's instruction clearly authorizes forced termination.
+6. Record the exact process list identified, the user's confirmation, the signals sent, and the final termination status in the task result.
+
+Never use broad `killall`, `pkill` patterns, or a generic `close-all` operation. A process tree may have a Node launcher as its parent and Chrome helper descendants, so identify the tree by parent-child relationships and Playwright ownership rather than by executable name alone.
 
 > **💡 Remove the `--no-sandbox` infobar**: by default playwright-cli appends `--no-sandbox` to the Chrome command line, which makes Chrome show the warning *"You are using an unsupported command-line flag: --no-sandbox. Stability and security will suffer."* at the top of every page. To remove it, set `browser.launchOptions.chromiumSandbox: true` in the config file — e.g. workspace `.playwright/cli.config.json`: `{ "browser": { "launchOptions": { "chromiumSandbox": true } } }`. The doli-cli repo already ships this config.
 
@@ -175,7 +188,7 @@ file path/to/article.pdf && ls -lh path/to/article.pdf
 
 ### Step 10 — Preserve the persistent workspace session
 
-Leave the selected profile-backed workspace session open after the search. Close it only when the user explicitly asks to close that identified session:
+Leave the selected profile-backed workspace session open after the search. Close it only when the user explicitly asks to close that identified session. The orphan-process procedure above is the only exception, and it requires exact Playwright process identification plus user confirmation:
 
 ```bash
 playwright-cli -s=<profile-name> close

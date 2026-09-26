@@ -1,7 +1,7 @@
 ---
 name: web-browser
 description: Navigate the web, browse pages, search, extract content, and fill forms using a headless browser (Playwright). Also supports web testing and debugging.
-allowed-tools: Bash(playwright-cli:*) Bash(npx:*) Bash(npm:*)
+allowed-tools: Bash(playwright-cli:*) Bash(npx:*) Bash(npm:*) Bash(ps:*) Bash(kill:*) Bash(python3:*)
 ---
 
 # Web Browser (playwright-cli)
@@ -282,6 +282,19 @@ playwright-cli -s=<profile-name> close
 playwright-cli -s=<session-name> delete-data
 ```
 
+## Orphan Playwright process termination
+
+When the user explicitly instructs termination of orphan browser processes, process termination is allowed only for browser trees initiated by `playwright-cli`.
+
+1. Inspect `playwright-cli list` and the OS process table first.
+2. List the exact root PIDs, child PIDs, executable paths, and parent-child relationships to the user. Do not print command arguments that may contain URLs, cookies, tokens, or other sensitive data.
+3. Ask the user to confirm that exact identified process list before sending signals, unless the user has already clearly confirmed that identified list in the current request.
+4. Terminate only the confirmed Playwright-initiated browser trees. Do not terminate Safari, Chrome, Vivaldi, Electron, system WebKit helpers, Chrome Remote Desktop, or unrelated browser processes merely because their names contain browser-related text.
+5. Send `SIGTERM` to the confirmed tree, verify which PIDs remain, and report the result. Use `SIGKILL` only when explicitly authorized or when the user's instruction clearly authorizes forced termination.
+6. Record the exact process list identified, the user's confirmation, the signals sent, and the final termination status in the task result.
+
+Never use broad `killall`, `pkill` patterns, or a generic `close-all` operation. A process tree may have a Node launcher as its parent and Chrome helper descendants, so identify the tree by parent-child relationships and Playwright ownership rather than by executable name alone.
+
 ## Snapshots
 
 After each command, playwright-cli provides a snapshot of the current browser state.
@@ -359,7 +372,7 @@ playwright-cli -s=workspace-browser close  # only when the user explicitly ident
 playwright-cli -s=workspace-browser delete-data  # only with explicit user consent
 ```
 
-Do not use `close-all` or `kill-all`. Never close/kill outside or ambiguous sessions.
+Do not use `close-all` or broad `kill-all` operations. Never close or kill outside or ambiguous sessions. The orphan-process procedure above is the only exception, and it requires explicit user instruction plus exact process identification and confirmation.
 
 ## Installation
 

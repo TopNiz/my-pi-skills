@@ -495,10 +495,10 @@ python3 scripts/send_email.py scripts/config.json "recipient@example.com" "Subje
 python3 scripts/send_email.py scripts/config.json "recipient@example.com" "Subject" /tmp/body.html --html
 
 # HTML with manual plain text fallback (recommended)
-python3 scripts/send_email.py scripts/config.json "recipient@example.com" "Subject" /tmp/body.html --html --alt /tmp/body_fallback.txt
+python3 scripts/send_email.py scripts/config.json "recipient@example.com" "Subject" /tmp/body.html --html --alt /tmp/body_fallback.txt --from-account "nizar.ayed@univ-lorraine.fr"
 ```
 
-This sends via **Gmail SMTP** (`smtp.gmail.com:587`, TLS) using the same App Password from your macOS Keychain.
+This sends via the SMTP server configured for the selected account, using the same Keychain credential.
 
 ### HTML support
 

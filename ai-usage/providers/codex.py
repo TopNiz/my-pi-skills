@@ -99,8 +99,10 @@ def fetch_live_status():
 
     rl = data.get("rate_limit") or {}
     win = rl.get("primary_window") or {}
+    secondary = rl.get("secondary_window") or {}
     credits = data.get("credits") or {}
     reset_at = win.get("reset_at")
+    secondary_reset_at = secondary.get("reset_at")
     return {
         "status": "ok",
         "account": data.get("email"),
@@ -112,7 +114,13 @@ def fetch_live_status():
             "window_seconds": win.get("limit_window_seconds"),
             "reset_at_epoch": reset_at,
             "reset_at": datetime.fromtimestamp(reset_at, tz=timezone.utc).isoformat() if reset_at else None,
-            "secondary_window": rl.get("secondary_window"),
+            "secondary_window": {
+                "used_percent": secondary.get("used_percent"),
+                "window_seconds": secondary.get("limit_window_seconds"),
+                "reset_after_seconds": secondary.get("reset_after_seconds"),
+                "reset_at_epoch": secondary_reset_at,
+                "reset_at": datetime.fromtimestamp(secondary_reset_at, tz=timezone.utc).isoformat() if secondary_reset_at else None,
+            },
         },
         "credits": {
             "has_credits": credits.get("has_credits"),
@@ -201,6 +209,23 @@ def fmt_tokens(n):
     return f"{int(n):,}"
 
 
+def print_window(label, window, allowed=None):
+    """Print one Codex rate-limit window with its own reset time."""
+    used = window.get("used_percent")
+    if used is not None:
+        try:
+            numeric_used = float(used)
+            filled = max(0, min(20, int(numeric_used / 5)))
+            shown_used = str(int(numeric_used)) if numeric_used.is_integer() else f"{numeric_used:.1f}"
+            print(f"  📊 {label:<11}{'█' * filled}{'░' * (20 - filled)} {shown_used}% used")
+        except (TypeError, ValueError):
+            print(f"  📊 {label:<11}used={used}")
+    elif allowed is not None:
+        print(f"  📊 {label:<11}allowed={allowed}")
+    if window.get("reset_at"):
+        print(f"  🔄 {label} reset: {window['reset_at']}")
+
+
 def print_pretty(data):
     live = data["live"]
     local = data["local"]
@@ -210,17 +235,15 @@ def print_pretty(data):
     if live.get("status") == "ok":
         print(f"  📋 Plan:        {live['plan'].title()}")
         rl = live["rate_limit"]
-        used = rl.get("used_percent")
-        limit_reached = rl.get("limit_reached")
-        if limit_reached:
-            print(f"  🚫 Limit:       ⛔ REACHED — usage limit hit")
-        elif used is not None:
-            bar = "█" * int(used / 5) + "░" * (20 - int(used / 5))
-            print(f"  📊 Weekly:      {bar} {used}% used (window ~{rl.get('window_seconds', 0)//86400}d)")
-        else:
-            print(f"  📊 Weekly:      allowed={rl.get('allowed')}")
-        if rl.get("reset_at"):
-            print(f"  🔄 Resets:      {rl['reset_at']}")
+        primary_window = {
+            "used_percent": rl.get("used_percent"),
+            "window_seconds": rl.get("window_seconds"),
+            "reset_at": rl.get("reset_at"),
+        }
+        print_window("5-hour", primary_window, rl.get("allowed"))
+        print_window("Weekly", rl.get("secondary_window") or {})
+        if rl.get("limit_reached"):
+            print("  🚫 Limit:       ⛔ REACHED, usage limit hit")
         cr = live["credits"]
         if cr.get("unlimited"):
             print(f"  ♾️  Credits:     Unlimited")
@@ -240,7 +263,7 @@ def print_pretty(data):
             match = m["rate_card_match"] or "no rate card match"
             print(f"    • {m['model']}: {fmt_tokens(m['tokens'])} tok, {m['sessions']} sess [{match}]{extra}")
         print(f"  🧾 Estimated credits: ~{local['credits_est']} (range {local['credits_range'][0]}–{local['credits_range'][1]})")
-        print(f"     Assumed mix in/out: {local['split_assumption']} — edit SPLIT in codex.py if needed")
+        print(f"     Assumed mix in/out: {local['split_assumption']}, edit SPLIT in codex.py if needed")
         print(f"     💡 ~$100–200/dev/month avg; typical GPT-5.6-Sol task ≈ 5–40 cr")
     else:
         print(f"  ⚠️  Local usage unavailable: {local.get('message')}")

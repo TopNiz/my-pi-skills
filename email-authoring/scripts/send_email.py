@@ -82,12 +82,15 @@ def main():
     # Parse optional flags
     send_html = False
     alt_text_file = None
+    requested_account = None
     remaining = args[4:]
     for i, arg in enumerate(remaining):
         if arg == '--html':
             send_html = True
         elif arg == '--alt' and i + 1 < len(remaining):
             alt_text_file = remaining[i + 1]
+        elif arg == '--from-account' and i + 1 < len(remaining):
+            requested_account = remaining[i + 1]
 
     if not os.path.exists(body_file):
         print(f"❌ Body file not found: {body_file}")
@@ -110,18 +113,24 @@ def main():
         print("❌ No active accounts configured.")
         sys.exit(1)
 
-    from_email = active[0]
+    from_email = requested_account or active[0]
     acct = accounts_cfg["list"].get(from_email, {})
+    if not acct:
+        print(f"❌ Account not configured: {from_email}")
+        sys.exit(1)
+
     imap_cfg = acct.get("imap", {})
-    username = imap_cfg.get("username", from_email)
+    smtp_cfg = acct.get("smtp", {})
+    username = smtp_cfg.get("username") or imap_cfg.get("username", from_email)
 
     pw_config = config.get("password_source", {})
     keychain_service = pw_config.get("service", "email-manager")
     password = get_password(from_email, keychain_service)
 
-    # Gmail SMTP settings
-    smtp_server = "smtp.gmail.com"
-    smtp_port = 587
+    smtp_server = smtp_cfg.get("server", "smtp.gmail.com")
+    smtp_port = int(smtp_cfg.get("port", 587))
+    smtp_use_ssl = bool(smtp_cfg.get("use_ssl", False))
+    smtp_starttls = bool(smtp_cfg.get("starttls", not smtp_use_ssl))
 
     # Build message
     if send_html:
@@ -140,15 +149,17 @@ def main():
         msg = MIMEText(body, 'plain', _charset='utf-8')
         content_type = "plain text"
 
-    msg["From"] = f"{username}"
+    msg["From"] = from_email
     msg["To"] = to_email
     msg["Subject"] = subject
     msg["Date"] = email.utils.formatdate(localtime=True)
 
     try:
         print(f"📤 Sending {content_type} email to {to_email}...")
-        server = smtplib.SMTP(smtp_server, smtp_port)
-        server.starttls()
+        server_cls = smtplib.SMTP_SSL if smtp_use_ssl else smtplib.SMTP
+        server = server_cls(smtp_server, smtp_port)
+        if smtp_starttls and not smtp_use_ssl:
+            server.starttls()
         server.login(username, password)
         server.sendmail(username, [to_email], msg.as_string())
         server.quit()

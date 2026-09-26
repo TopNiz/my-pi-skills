@@ -12,6 +12,7 @@ Full management of your Scaleway infrastructure via the `scw` CLI and REST APIs.
 
 ```
 scaleway/
+├── .env            # Container Registry pull credential (owner readable only)
 ├── SKILL.md        # This file
 └── pi-setup.md     # Pi agent integration — using Scaleway LLMs inside pi
 ```
@@ -20,7 +21,9 @@ scaleway/
 
 ## Authentication
 
-Credentials are stored in `~/.config/scw/config.yaml` by the `scw` CLI.
+Credentials are stored in `~/.config/scw/config.yaml` by the `scw` CLI. This is a
+personal key with full user rights, so prefer a scoped IAM application key for
+anything that runs unattended.
 
 ```bash
 scw info                        # show current profile, access key, default zone
@@ -28,6 +31,84 @@ scw config get secret-key       # retrieve the secret key (use in scripts, never
 ```
 
 > **🔒 Security note**: Never echo or print the secret key. Source it into variables only.
+
+---
+
+## Container Registry
+
+The registry lives in `fr-par`, the same region as `codimeo.com`, so images
+never leave the region on their way to the server.
+
+| Item | Value |
+|---|---|
+| Endpoint | `rg.fr-par.scw.cloud` |
+| Namespace | `chain-it` (private) |
+| Namespace id | `0fc6eca8-bccb-458a-afdc-6e35f2be7504` |
+| Website image | `rg.fr-par.scw.cloud/chain-it/chain-it-website` |
+| Tags | `prod` (moving), `sha-<commit>`, `<date>-<sha>` (immutable) |
+
+### Credentials
+
+Two IAM applications, each with a policy scoped to the project, so neither uses
+a personal key:
+
+| Application | Policy / permission set | Holder |
+|---|---|---|
+| `chain-it-ci` | `chain-it-ci-push` / `ContainerRegistryFullAccess` | GitHub Actions secrets `SCW_ACCESS_KEY`, `SCW_SECRET_KEY` in `TopNiz/chain-it-website` |
+| `chain-it-server-pull` | `chain-it-server-pull` / `ContainerRegistryReadOnly` | this skill's `.env`, used by `codimeo.com` |
+
+`.env` variables (owner readable only, `chmod 600`):
+
+| Variable | Purpose |
+|---|---|
+| `SCW_REGISTRY` | Registry endpoint, `rg.fr-par.scw.cloud` |
+| `SCW_REGISTRY_NAMESPACE` | Namespace, `chain-it` |
+| `SCW_REGISTRY_ACCESS_KEY` | Pull credential, access key (this is the docker username) |
+| `SCW_REGISTRY_SECRET_KEY` | Pull credential, secret key (this is the docker password) |
+
+> **🔒 Security note**: never echo, print, log or commit these values, and never
+> pass them as command arguments. Source the file into variables and pipe the
+> secret into `docker login --password-stdin`.
+
+### Log in, log out, verify
+
+```bash
+set -a; . ~/.agents/skills/scaleway/.env; set +a
+
+# Log in without putting the secret on the command line
+printf '%s' "$SCW_REGISTRY_SECRET_KEY" \
+  | docker login "$SCW_REGISTRY" --username "$SCW_REGISTRY_ACCESS_KEY" --password-stdin
+
+# Verify: pull the published site image (the server is amd64)
+docker pull "$SCW_REGISTRY/$SCW_REGISTRY_NAMESPACE/chain-it-website:prod"
+
+# Log out and clear the variables
+docker logout "$SCW_REGISTRY"
+unset SCW_REGISTRY_SECRET_KEY SCW_REGISTRY_ACCESS_KEY
+```
+
+On `codimeo.com` this login is already in place, stored in
+`~/.docker/config.json`. Re-run the commands above only after rotating the key.
+The pull credential cannot push: an attempted `docker push` is denied.
+
+### Inspecting and pruning
+
+In this API an *image* is the repository and *tags* are the versions. Never run
+`scw registry image delete`: it removes the repository and every tag in it.
+
+```bash
+scw registry namespace list
+scw registry image list namespace-id=0fc6eca8-bccb-458a-afdc-6e35f2be7504 -o json  # one entry per repository
+scw registry tag list image-id=<image-id> -o json                             # tags, with digests
+
+# remove one version
+scw registry tag delete tag-id=<tag-id>
+# tags sharing a digest need the deprecated flag, or the call fails
+scw registry tag delete force=true tag-id=<tag-id>
+```
+
+Old dated tags accumulate at roughly 80 MB each. Keep the deployed tag and the one
+before it, and always delete the tag, never the image.
 
 ---
 

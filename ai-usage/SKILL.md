@@ -14,7 +14,7 @@ Check the status, costs, and usage of all your AI accounts from one place.
 | **🟠 Ollama Cloud** | API key validity, available cloud models |
 | **🐙 GitHub Copilot** | Plan type, features enabled, available models count |
 | **🟣 Scaleway** | Total cost by category, AI/Gen APIs highlight, current period consumption |
-| **🤖 Codex (ChatGPT)** | Plan, weekly usage limit, reset date, credit balance, estimated credits from local CLI history via the official token-based rate card |
+| **🤖 Codex (ChatGPT)** | Plan, separate 5-hour and weekly usage limits with reset dates, credit balance, estimated credits from local CLI history via the official token-based rate card |
 
 ---
 
@@ -256,12 +256,13 @@ Key: `~/.local/share/opencode/auth.json` → `ollama-cloud.key`
 
 | Endpoint / Source | Data |
 |---|---|
-| `GET https://chatgpt.com/backend-api/codex/usage` | Plan, weekly limit window (used %, reset date), credit balance, spend control |
+| `GET https://chatgpt.com/backend-api/codex/usage` | Plan, separate primary 5-hour and secondary 7-day limit windows (used %, reset dates), credit balance, spend control |
 | `~/.codex/state_5.sqlite` (threads table) | Per-session token usage by model from local Codex CLI history |
 | Official Codex rate card (`help.openai.com/en/articles/20001106`) | Credits per 1M tokens (input/cached/output) per model — token-based pricing since Apr 2026 |
 
 **How it works:**
-- Reads the ChatGPT access token from `~/.codex/auth.json` (never printed) and calls the backend API for live plan/limit/credit status
+- Reads the ChatGPT access token from `~/.codex/auth.json` (never printed) and calls the backend API for live plan, separate 5-hour and weekly limit, and credit status
+- Reports the primary 5-hour window and secondary 7-day window independently; each has its own usage percentage and reset time
 - Computes an **estimated credit consumption** from local CLI history (last 30 days): tokens per model × rate-card credits, using an assumed input/cached/output mix (`SPLIT` constant, default 80/10/10)
 - Reports both the estimate and a range (all-cached → all-output) since the local history has no per-request token split
 - Token-based rate card is embedded in the script and dated — refresh it when OpenAI publishes updates
