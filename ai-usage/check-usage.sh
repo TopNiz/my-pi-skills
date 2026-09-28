@@ -15,6 +15,11 @@
 
 set -euo pipefail
 
+# Providers print emoji. Force UTF-8 so a legacy Windows code page (cp1252)
+# cannot abort a run that otherwise succeeded.
+export PYTHONIOENCODING=utf-8
+export PYTHONUTF8=1
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROVIDERS_DIR="$SCRIPT_DIR/providers"
 
@@ -99,9 +104,12 @@ if [ "$OUTPUT_MODE" != "json" ]; then
     esac
 
     if [ -x "$script" ]; then
-      # Run with --json and pipe to Python for error handling
-      result=$("$script" $PRETTY_FLAG 2>&1)
-      exit_code=$?
+      # A provider exiting non-zero (a missing API key is the common case) must
+      # not abort the report. Under `set -e` an unguarded command substitution
+      # kills the script before the exit code can be inspected, so the run stops
+      # at the first unconfigured provider and the footer never prints.
+      exit_code=0
+      result=$("$script" $PRETTY_FLAG 2>&1) || exit_code=$?
       if [ $exit_code -ne 0 ]; then
         echo "  ⚠️  Script error (exit $exit_code)"
         echo "$result" | sed 's/^/    /'
