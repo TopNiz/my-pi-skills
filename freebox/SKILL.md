@@ -10,39 +10,107 @@ Full API access to your Freebox Server via the FreeboxOS REST API.
 
 ## 📖 Offline Documentation
 
-A complete copy of the official FreeboxOS API docs is available at `docs/*.html`.
+`docs/index.html` is the **whole FreeboxOS API reference in a single page** (~1.8 MB),
+vendored so it works offline.
 
-**When to consult the docs**: fall back to reading the relevant doc file only when:
-- The endpoint you need isn't documented in this SKILL.md
-- You're unsure about request/response fields, parameters, or error codes
-- You get an unexpected response and need the authoritative reference
-
-**Documentation file map** (all paths relative to skill dir `~/.agents/skills/freebox/`):
-
-| Feature | Doc file |
+| | |
 |---|---|
-| Login, auth, sessions | `docs/login.html` |
-| Connection, FTTH/xDSL stats | `docs/connection.html` |
-| Wi-Fi APs, planning, guests | `docs/wifi.html` |
-| LAN, DHCP, devices | `docs/lan.html` / `docs/dhcp.html` |
-| NAT, port forwarding, UPnP IGD | `docs/nat.html` / `docs/igd.html` |
-| Downloads, torrents, NZB | `docs/download.html` / `docs/download_config.html` / `docs/download_feeds.html` |
-| File system (browse, upload, delete) | `docs/fs.html` / `docs/upload.html` |
-| File sharing links | `docs/share.html` |
-| Network shares, FTP | `docs/network_share.html` / `docs/ftp.html` |
-| System, reboot, firmware | `docs/system.html` |
-| Call logs | `docs/call.html` |
-| Contacts | `docs/contacts.html` |
-| PVR, TV recordings | `docs/pvr.html` |
-| AirMedia | `docs/airmedia.html` |
-| VPN server / client | `docs/vpn.html` / `docs/vpn_client.html` |
-| Parental control | `docs/parental.html` |
-| Storage, disks | `docs/storage.html` |
-| Switch, Freeplugs, LCD | `docs/switch.html` / `docs/freeplug.html` / `docs/lcd.html` |
-| UPnP AV | `docs/upnpav.html` |
-| RRD statistics | `docs/rrd.html` |
-| API version changes | `docs/api_changes_*_to_*.html` |
-| Full TOC | `docs/index.html` |
+| Source (on the box) | `https://<box>:40743/doc/index.html` |
+| Vendored build | `c1fd8795` |
+| Previously vendored | `9ba63963` (taken from `dev.freebox.fr/sdk/os/`) |
+| Coverage | 2729 anchors across 69 endpoint families |
+
+The box serves a **single-page** build: `docs/connection.html`, `docs/lan.html` etc. do not
+exist there (all 404) — the older per-feature files were removed in favour of this one page.
+The page also links to `genindex.html` and `search.html`, which the Freebox does not serve
+either, so those two links are dead offline as well.
+
+**Do not read the page wholesale.** Jump to a section by anchor:
+
+```bash
+cd ~/.agents/skills/freebox
+grep -n 'id="dhcp-configuration-api"' docs/index.html          # find the line
+awk '/id="dhcp-configuration-api"/,/id="dhcp-static-lease-api"/' docs/index.html   # extract it
+```
+
+**When to consult it**: the endpoint you need isn't covered below, you're unsure about
+request/response fields, parameters or error codes, or a response was unexpected.
+
+**Family anchors** — `docs/index.html#<anchor>`:
+
+| Area | Anchor |
+|---|---|
+| Auth / session | `make-an-authenticated-call-to-the-api` |
+| Connection, FTTH / xDSL / LTE | `connection-api` |
+| LAN, devices, DHCP | `lan-config-api`, `lan-browser-api`, `dhcp-configuration-api`, `dhcp-static-lease-api`, `dhcpv6-configuration-api` |
+| Wi-Fi | `wi-fi-global-config-api`, `wi-fi-ap-api`, `wi-fi-bss-api`, `wi-fi-mac-filter-api`, `wi-fi-steering-config-api`, `wifi-wps-api` |
+| NAT, port forwarding, DMZ, UPnP-IGD | `port-forwarding-api`, `incoming-port-api`, `dmz-config-api`, `upnp-igd-config-api`, `upnp-igd-redirection-api` |
+| Routing | `routing-config-api`, `rule-api` |
+| Downloads, torrents | `download-api`, `download-files-api`, `download-tracker-api`, `download-feed-api` |
+| File system | `file-system-api`, `file-sharing-link-api` |
+| Shares: AFP / Samba / FTP / TFTP | `afp-config-api`, `samba-config-api`, `ftp-config-api`, `tftp-config-api` |
+| Storage, disks, partitions | `storage-config-api`, `storage-disk-api`, `storage-partition-api` |
+| System, firmware | `system-api` |
+| Calls, voicemail, contacts | `call-api`, `voicemail-api`, `contact-api` |
+| PVR, TV, media | `pvr-config-api`, `pvr-quota-api`, `media-api`, `frecord-api`, `precord-api` |
+| AirMedia | `airmedia-api`, `airmedia-configuration-api` |
+| VPN server | `vpn-server-config-api`, `vpn-server-connection-api`, `vpn-server-user-api` |
+| Home automation / cameras | `home-api`, `camera-api` |
+| Profiles, network control | `profiles-api`, `network-control-api` |
+| Switch, Freeplug, LCD, LED strip | `switch-api`, `freeplug-api`, `lcd-config-api`, `ledstrip-api` |
+| UPnP AV | `upnp-av-config-api` |
+| Diagnostics | `diagnostic-api`, `slowness-api` |
+| WebSocket | `websocket-api`, `websocket-event-api`, `websocket-file-upload-api`, `ws-api` |
+
+### Refreshing the vendored docs
+
+```bash
+cd ~/.agents/skills/freebox
+B="https://<box>:40743/doc"
+for f in index.html _static/documentation_options.js _static/fbx.js \
+         _static/main.css _static/pygments.css; do
+  curl -sk --create-dirs -o "docs/$f" "$B/$f"
+done
+```
+
+`_static/favicon.ico` is referenced by the page but not served by the box; the vendored
+copy is kept so the reference resolves.
+
+### Undocumented endpoints (`/domain/`, `/settings/`)
+
+Two API families exist on v16 and are used by the FreeboxOS web UI, but appear in **no**
+published doc set — not in this vendored build, not on `dev.freebox.fr`: **`/domain/`** and
+**`/settings/`**. Do not conclude an endpoint is absent just because the docs omit it.
+
+Found so far:
+
+| Endpoint | Returns |
+|---|---|
+| `GET /domain/config/` | `default_domain`, `root_domains`, `api_domain` |
+| `GET /domain/owned/` | domains with `type` (`auto` / `custom`) and per-algorithm cert status |
+| `GET /settings/` | FreeboxOS desktop/app layout |
+| `GET /settings/{1..15}` | per-app UI state, including window geometry |
+
+**How they were discovered — the reliable method for this box.** The FreeboxOS UI hash names
+the API family directly. Open the settings pane in a browser and read the hash:
+
+```
+#Fbx.os.app.settings.domains.Domains   →  /domain/config/, /domain/owned/
+```
+
+Then confirm via the page's own request log rather than guessing paths:
+
+```js
+performance.getEntriesByType('resource')
+  .map(r => r.name).filter(n => /\/api\//.test(n))
+```
+
+> ⚠️ **A browser login evicts the skill's API session.** Opening FreeboxOS in a browser
+> while the skill is authenticated makes the next `call.sh` return `403`, even immediately
+> after `verify.sh` refreshed the token (FreeboxOS limits concurrent sessions). To keep
+> working, query the API from inside the logged-in page:
+> `fetch('/api/latest/settings/', {credentials: 'include'})`. Note the UI uses
+> `/api/latest/`, which also works through `call.sh`.
 
 ---
 
@@ -65,28 +133,8 @@ A complete copy of the official FreeboxOS API docs is available at `docs/*.html`
 freebox/
 ├── .env                        # Owner-only API credentials (never commit/share)
 ├── SKILL.md                    # This file
-├── docs/                       # Offline API reference (from dev.freebox.fr)
-│   ├── index.html              # Full TOC → start here
-│   ├── login.html              # Authentication docs
-│   ├── connection.html         # Connection & xDSL/FTTH stats
-│   ├── download.html           # Torrent/download manager
-│   ├── fs.html                 # File system
-│   ├── wifi.html               # Wi-Fi configuration
-│   ├── lan.html                # LAN & DHCP
-│   ├── nat.html                # NAT & port forwarding
-│   ├── system.html             # System & firmware
-│   ├── call.html               # Call logs
-│   ├── contacts.html           # Address book
-│   ├── pvr.html                # TV recordings
-│   ├── vpn.html / vpn_client.html
-│   ├── parental.html           # Parental control
-│   ├── storage.html            # Storage management
-│   ├── airmedia.html           # AirMedia
-│   ├── network_share.html      # Network shares
-│   ├── ftp.html / upnpav.html / igd.html / lcd.html / rrd.html / switch.html / freeplug.html
-│   ├── download_config.html / download_feeds.html
-│   ├── upload.html / share.html
-│   ├── api_changes_1_1_to_2_0.html / api_changes_2_0_to_3_0.html / api_changes_3_0_to_4_0.html
+├── docs/                       # API reference, generated by the Freebox itself
+│   ├── index.html              # The whole API in one page (~1.8 MB)
 │   └── _static/                # CSS/JS assets
 └── scripts/
     ├── login.sh                # Open a session (challenge → HMAC → session_token)
@@ -94,7 +142,10 @@ freebox/
     └── call.sh                 # Make an authenticated API call
 ```
 
-> **📖 Offline docs**: Open `docs/index.html` in a browser for the full API reference with sidebar navigation. All internal links are relative — works without internet.
+> **📖 Offline docs**: `docs/index.html` holds the entire API in one page — it is the
+> authoritative reference for request/response fields. It is a flat single-page build (no
+> sidebar, and its `genindex.html` / `search.html` links 404 on the box too), so navigate it
+> by anchor or extract a single section rather than reading the whole file.
 
 ---
 

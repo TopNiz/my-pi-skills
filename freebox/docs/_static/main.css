@@ -87,6 +87,16 @@ table.docutils {
 
 table.docutils td {
   padding: 5px;
+  border: 1px solid;
+}
+
+table.docutils th {
+  text-align: center;
+  border: 1px solid;
+}
+
+table.docutils p {
+  display: inline;
 }
 
 table.docutils .row-even {
@@ -121,4 +131,14 @@ img.align-center, .figure.align-center, object.align-center {
 
 .align-right {
     text-align: right;
+}
+
+ul.simple li p,
+ul.simple li dl,
+ul.simple li dl dt {
+  display: inline;
+}
+
+.section dt {
+  font-weight: bold;
 }
