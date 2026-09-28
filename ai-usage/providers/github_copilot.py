@@ -28,6 +28,18 @@ Usage:
   ./github_copilot.py --verbose    # Pretty + raw JSON
 """
 
+# --- UTF-8 stdout guard ---------------------------------------------------
+# On Windows stdout defaults to the legacy code page (cp1252), which cannot
+# encode the emoji in this script's output: print() raises UnicodeEncodeError
+# and the provider dies *after* fetching its data. stderr is unaffected because
+# Python gives it errors="backslashreplace" by default, which is why warnings
+# looked fine while successful runs crashed.
+import sys as _sys
+try:
+    _sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:  # pragma: no cover - non-reconfigurable stream
+    pass
+
 import json
 import os
 import subprocess
