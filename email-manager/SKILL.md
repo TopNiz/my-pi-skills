@@ -309,11 +309,15 @@ After presenting the categorized summary, offer to:
 When the user asks to draft any email — a reply, a new message, a report, a summary, or an invoice email — use the **[email-authoring](../email-authoring/SKILL.md)** skill to generate the content:
 
 1. **Load the email-authoring skill** — Read `../email-authoring/SKILL.md` and `../email-authoring/references/STYLE-GUIDE.md`
-2. **Use contact context for replies** — For a reply or a known recipient, check `../email-authoring/contacts/index.json` and read the matching message history when available. Do not require contact history for new emails.
+2. **Contact-style profiling is EXPERIMENTAL** — Do not check `../email-authoring/contacts/index.json`, read contact history, or use sent-message style profiles unless the user explicitly instructs the agent to enable this feature.
 3. **Match language and tone** — Apply the authoring guidance and choose the appropriate language-specific signature.
-4. **Apply presentation templates** — For structured content such as reports, summaries, invoices, readings, or comparisons, use `../email-authoring/references/EMAIL-TEMPLATES.md`, including its stylesheet, container, headings/tables, and visual hierarchy.
-5. **Use the correct signature** — Use the French or English HTML signature from `STYLE-GUIDE.md` section 11, populated from `../email-authoring/config/signature.json`, unless a documented personal-message exception applies.
-6. **Create the Gmail draft** — Use the Gmail API `drafts.create()` with `multipart/alternative` (HTML + plain text) and leave `To` empty when the user asks for an unaddressed draft.
+4. **Apply presentation templates** — For structured content such as reports, summaries, invoices, readings, or comparisons, use `../email-authoring/references/EMAIL-TEMPLATES.md`, including its stylesheet, container, headings/tables, and visual hierarchy. For miXYtés emails, use `references/MIXYTES-EMAIL-TEMPLATE.html`: a centered 600px layout with only the miXYtés website top bar, containing the logo and linked social-media icons, with the menu and phone button removed. The social icons use the website's Font Awesome 6.7.2 brand SVG paths inline in the HTML. Embed only `references/mixytes-web-logo.png` with `Content-ID: <mixytes-web-logo>`.
+5. **Use the correct signature** — For miXYtés-related emails sent by Nizar in his capacity as Vice-President, use `references/MIXYTES-SIGNATURE.md`. This signature intentionally omits an email address for now. For other emails, use the French or English HTML signature from `STYLE-GUIDE.md` section 11, populated from `../email-authoring/config/signature.json`, unless a documented personal-message exception applies.
+   - The miXYtés signature logo must be embedded inline in the HTML branch of a `multipart/related` message with `Content-ID: <miXYtes-logo>`.
+   - Attach `references/miXYtes-logo.png` to the related part. Do not use a remote image URL.
+   - When the miXYtés email template is used, attach `references/mixytes-web-logo.png` to the same related part with `Content-ID: <mixytes-web-logo>`.
+   - The three social-media icons are inline SVGs based on the website's Font Awesome 6.7.2 brand icons, so they do not require separate image attachments.
+6. **Create the Gmail draft directly** — For a draft request, use the Gmail API `drafts.create()` with `multipart/alternative` (HTML + plain text) and save it directly in Gmail's Drafts folder. Leave `To` empty only when the user asks for an unaddressed draft. Do not merely present draft text unless the user asks for text instead of a Gmail draft.
 7. **Wait for confirmation before sending** — Never send without explicit user approval.
 
 > The email-authoring skill handles **authoring style** (tone, greeting, language) and **presentation style** (HTML layout, structured templates, and signatures). The email-manager skill handles Gmail transport, fetching, draft creation, and sending safeguards.

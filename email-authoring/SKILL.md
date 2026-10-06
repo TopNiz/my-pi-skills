@@ -1,12 +1,12 @@
 ---
 name: email-authoring
-description: Author new emails and replies in your writing style. Fetches your sent emails from IMAP, builds per-contact style profiles, and drafts HTML emails matching your language, tone, presentation preferences, and signature.
+description: Author HTML email drafts using request context, language, presentation preferences, and signatures. Contact-specific style profiling is experimental and disabled by default.
 allowed-tools: read write edit bash
 ---
 
 # ✉️ Email Authoring Skill
 
-Authors new emails and replies by learning **your personal writing style per contact** (tone, language, greeting, sign-off) and your **preferred presentation style** (HTML formatting, tables, structured layouts). Instead of generic AI-sounding messages, get emails that sound like *you* and look like *you*.
+Authors emails using the request context, the required language, and your preferred presentation style (HTML formatting, tables, and structured layouts). Contact-specific style profiling is experimental and disabled by default.
 
 ---
 
@@ -27,9 +27,9 @@ If it's not there yet, add it:
 security add-generic-password -a "your.email@example.com" -s "email-manager" -w "YOUR_APP_PASSWORD" -U
 ```
 
-### Step 1 — Fetch Your Sent Messages
+### EXPERIMENTAL: Step 1 — Fetch Your Sent Messages
 
-Build the contact database from your last 6 months of sent emails:
+Contact-specific style profiling is **EXPERIMENTAL** and must not be used unless the user explicitly instructs the agent to enable it. If explicitly enabled, build the contact database from the last 6 months of sent emails:
 
 ```bash
 cd ~/.agents/skills/email-authoring
@@ -46,7 +46,9 @@ This will:
 
 > **⏱ Takes ~1-2 minutes** depending on how many messages you've sent.
 
-### Step 2 — Rebuild Index & Detect Languages
+### EXPERIMENTAL: Step 2 — Rebuild Index & Detect Languages
+
+This step is disabled by default and must not be run unless the user explicitly enables contact-style profiling.
 
 ```bash
 python3 scripts/rebuild_contacts.py scripts/config.json
@@ -54,7 +56,9 @@ python3 scripts/rebuild_contacts.py scripts/config.json
 
 This detects the language you use with each contact (French, English, Arabic) and rebuilds the index.
 
-### Step 3 — Auto-learn Categories (Optional but Recommended)
+### EXPERIMENTAL: Step 3 — Auto-learn Categories (Disabled by default)
+
+This step is disabled by default and must not be run unless the user explicitly enables contact-style profiling.
 
 Let the LLM analyze your contacts and suggest categories. Run this manually by asking:
 
@@ -78,16 +82,20 @@ You can also set categories manually:
 
 ### How it works
 
-1. You receive an email
-2. You say: **"Draft this email in my style"** or **"Reply to this in my style"**
+1. You receive an email or provide the details for a new email
+2. You say: **"Draft this email"** or **"Reply to this email"**
 3. The agent:
-   - Looks up the sender in `contacts/index.json`
-   - Reads your past messages to that person from `contacts/messages/<email>.json`
-   - Identifies the language of the incoming message
-   - Considers the contact's category (client, friend, etc.)
-   - Drafts 2-3 reply options in **your specific voice**
+   - Uses the request context and the required communication language
+   - Identifies the language of the incoming message when replying
+   - Uses a clear, appropriate professional tone unless the user specifies another tone
+   - Drafts the message in HTML with a plain text fallback and the appropriate signature
+   - Creates the draft directly in Gmail's Drafts folder
+
+Contact lookup and contact-specific style imitation are EXPERIMENTAL. Do not use them unless the user explicitly instructs the agent to do so.
 
 ### Usage examples
+
+The examples below illustrate the EXPERIMENTAL contact-style profiling feature. Do not follow the contact lookup steps unless the user explicitly enables that feature.
 
 ```
 User: "Reply to this email in my style:
@@ -125,11 +133,11 @@ Agent: [Looks up marc@example.com, reads past messages in French,
 
 The agent must follow these rules when drafting replies:
 
-1. **Contact lookup first** — Always check `contacts/index.json` first. If the contact exists, read their message file.
+1. **Contact lookup is EXPERIMENTAL** — Do not check `contacts/index.json`, read contact history, or fetch sent messages unless the user explicitly enables this feature.
 
 2. **Language match** — Reply in the **same language** as the incoming message. If the incoming message is in French, reply in French. If English, reply in English.
 
-3. **Style imitation** — Analyze the stored messages for:
+3. **Style imitation is EXPERIMENTAL** — Only analyze stored messages when the user explicitly enables contact-style profiling. Otherwise, use the requested context and a suitable general tone. If enabled, analyze the stored messages for:
    - **Greeting style** (Bonjour / Salut / Hey / Coucou / Cher / Hi / Hello / nothing)
    - **Sentence length** (short & punchy vs. detailed & explanatory)
    - **Punctuation** (lots of exclamation marks, ellipses, or minimal)
@@ -140,7 +148,7 @@ The agent must follow these rules when drafting replies:
    - **Typical response length** (1 sentence, short paragraph, multi-paragraph)
    - **Signature used** — Always append the correct signature based on the reply language (see signatures below)
 
-4. **Category adaptation** — Adjust tone based on contact category:
+4. **Category adaptation is EXPERIMENTAL** — Only use contact categories when the user explicitly enables contact-style profiling. If enabled, adjust tone based on contact category:
    - `client` → professional, clear, structured
    - `colleague` → collaborative, direct, often short
    - `family` → warm, personal, emoji-friendly
@@ -148,10 +156,7 @@ The agent must follow these rules when drafting replies:
    - `service` → polite, specific, reference numbers
    - `unknown` → slightly more formal, matching message language
 
-5. **No contact found** — If the sender is not in your database:
-   - Reply in the same language as the incoming message
-   - Use a generally appropriate tone (slightly formal, matching message)
-   - Offer to save this contact for future style learning
+5. **When experimental profiling is disabled** — Do not inspect the contact database or offer to save contact history. Use a generally appropriate tone matching the message and context.
 
 6. **Provide options** — Always offer 2-3 reply options with brief notes (e.g., "Short & direct" / "More detailed" / "Warm & friendly")
 
