@@ -255,6 +255,10 @@ Legacy event color palette exposed by API:
 
 ## Agent Usage Patterns
 
+### Priority rule: spiritual activities
+
+The user's spiritual activities are important commitments. Preserve them when planning or reshaping the calendar. They may be moved, shortened, or removed only when there is a genuinely very important conflicting commitment; generic work blocks, administrative routines, and other lower-priority activities must yield first. When proposing or creating a plan, explicitly protect the spiritual time and treat it as a higher priority than generic activities.
+
 When the user asks about calendar:
 
 ```
