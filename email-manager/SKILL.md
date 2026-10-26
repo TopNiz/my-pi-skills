@@ -48,9 +48,13 @@ cd ~/.agents/skills/email-manager
 uv sync                        # creates .venv from pyproject.toml + uv.lock
 ```
 
-Refresh-token storage is platform-specific: macOS uses the Keychain, Linux the Secret
-Service, and Windows a plain file (`token.gmail.json`). The `auth.py --migrate` command only
-applies to macOS/Linux, where it imports legacy local OAuth files into the native store.
+Refresh-token storage is platform-specific: interactive macOS sessions use the Keychain,
+Linux uses the Secret Service, and Windows uses a plain file (`token.gmail.json`). On macOS
+SSH sessions, the skill deliberately uses `credentials.gmail.json` and `token.gmail.json` in
+this skill folder instead of the Keychain, because the remote session may not have access to
+the user's GUI login keychain. Keep those two files private (mode 0600). The `auth.py --migrate`
+command only applies to macOS/Linux, where it imports legacy local OAuth files into the native
+store.
 
 > ⚠️ **Never install these dependencies with `pip install --target .deps`.** On Windows, pip
 > stages wheels in a `mkdtemp()` tree (mode `0o700`) and then `shutil.move`s them into place.
@@ -105,7 +109,8 @@ Where credentials live is **per platform**:
 | Platform | Refresh token | OAuth client config |
 |---|---|---|
 | Windows | `token.gmail.json` (file, gitignored) | `credentials.gmail.json` (file, gitignored) |
-| macOS | Keychain (`keyring`) | Keychain (imported with `--migrate`) |
+| macOS, interactive session | Keychain (`keyring`) | Keychain (imported with `--migrate`) |
+| macOS, SSH session | `token.gmail.json` in this skill folder | `credentials.gmail.json` in this skill folder |
 | Linux | Secret Service (`secret-tool`) or systemd credentials | Secret Service or systemd credentials |
 
 Windows needs no OS credential store at all: `auth.py` reads and writes `token.gmail.json`
@@ -139,10 +144,12 @@ browser consent cannot be completed there. Run consent once in a normal interact
 > ⚠️ A token file holds a `gmail.modify` refresh token. Keep it inside the skill directory
 > (gitignored) and delete it once the agent no longer needs it.
 
-**macOS / Linux** — `PI_EMAIL_MANAGER_TOKEN_FILE` opts into the same file store and takes
-precedence over the OS credential store; it is read *and* written. To import legacy files into
-the native store, run `python scripts/auth.py --migrate` (on Windows this is a no-op, since the
-file already *is* the store).
+**macOS / Linux** — `PI_EMAIL_MANAGER_TOKEN_FILE` opts into the same file token store and takes
+precedence over the OS credential store; it is read *and* written. On macOS SSH sessions, this
+skill automatically reads the two legacy JSON files in its folder and writes refreshed tokens
+to `token.gmail.json`. On an interactive macOS session, credentials continue to use Keychain.
+To import legacy files into the native store, run `python scripts/auth.py --migrate` (on Windows
+this is a no-op, since the file already is the store).
 
 **Provisioning another machine:** copy `credentials.gmail.json` (not in Git), then run the
 consent once there. On macOS/Linux you can instead `--export` here and `--migrate` there; on

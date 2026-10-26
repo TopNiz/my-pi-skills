@@ -2,9 +2,10 @@
 """Gmail API OAuth2 credentials and their platform-specific stores.
 
 Store selection:
-  - macOS  : Keychain (``keyring``)
-  - Linux  : Secret Service via ``secret-tool``
-  - Windows: a plain file, ``token.gmail.json`` next to this script
+  - macOS interactive: Keychain (``keyring``)
+  - macOS SSH       : JSON files next to this script
+  - Linux           : Secret Service via ``secret-tool``
+  - Windows         : a plain file, ``token.gmail.json`` next to this script
 
 Windows never touches Credential Manager: sandboxed and non-interactive
 sessions cannot reach it (``WinError 1312``), so the refresh token always lives
@@ -163,6 +164,10 @@ def _get_secret(account: str) -> str | None:
     if systemd_path:
         return systemd_path.read_text(encoding="utf-8")
 
+    if sys.platform == "darwin" and os.environ.get("SSH_CONNECTION"):
+        path = LEGACY_CLIENT_FILE if account == CLIENT_ACCOUNT else LEGACY_TOKEN_FILE
+        return path.read_text(encoding="utf-8") if path.is_file() else None
+
     if sys.platform == "win32":
         # Windows Credential Manager is deliberately not used: non-interactive
         # and sandboxed sessions cannot reach it (WinError 1312), so the file
@@ -206,6 +211,8 @@ def _token_file() -> Path | None:
     value = os.environ.get(TOKEN_FILE_ENV, "").strip()
     if value:
         return Path(value).expanduser()
+    if sys.platform == "darwin" and os.environ.get("SSH_CONNECTION"):
+        return LEGACY_TOKEN_FILE
     if sys.platform == "win32":
         return LEGACY_TOKEN_FILE
     return None
