@@ -214,6 +214,34 @@ scw inference node-type list       # show available GPU node types & stock
 
 ---
 
+## Organization Quota API
+
+Scaleway's IAM Quotas API provides organization quota limits and locality
+(global, region, or zone). It has two read-only calls:
+
+```bash
+SCW_SECRET_KEY="$(scw config get secret-key)"
+SCW_ORG_ID="$(scw config get default-organization-id)"
+
+# List all quotas and their per-locality limits
+curl -sS -G 'https://api.scaleway.com/iam/v1alpha1/quota' \
+  --data-urlencode "organization_id=$SCW_ORG_ID" \
+  -H "X-Auth-Token: $SCW_SECRET_KEY"
+
+# Retrieve one quota by its exact quota name
+curl -sS -G 'https://api.scaleway.com/iam/v1alpha1/quota/<quotum_name>' \
+  --data-urlencode "organization_id=$SCW_ORG_ID" \
+  -H "X-Auth-Token: $SCW_SECRET_KEY"
+
+unset SCW_SECRET_KEY SCW_ORG_ID
+```
+
+Keep the secret key out of terminal output, logs, and source control. The list
+response includes quota names, limits, and locality fields such as `global`,
+`region`, or `zone`. See the [IAM Quotas API reference](https://www.scaleway.com/en/developers/api/iam/quotas).
+
+---
+
 ## Compute Instances
 
 ```bash
