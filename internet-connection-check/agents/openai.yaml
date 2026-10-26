@@ -1,0 +1,4 @@
+interface:
+  display_name: "Internet Connection Check"
+  short_description: "Measure capacity separately from responsiveness under load"
+  default_prompt: "Use $internet-connection-check to measure download and upload capacity separately, then show responsiveness under simultaneous load."
