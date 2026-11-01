@@ -1,0 +1,20 @@
+services:
+  speedtest:
+    image: rg.fr-par.scw.cloud/chain-it/internet-speedtest:prod
+    container_name: internet-speedtest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18010:8080"
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/ping', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
