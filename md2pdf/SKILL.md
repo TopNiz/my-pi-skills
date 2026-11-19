@@ -1,6 +1,6 @@
 ---
 name: md2pdf
-description: Convert Markdown documents to styled PDFs using pandoc + weasyprint with a clean A4 report layout (red headers, zebra tables, page numbers). Automatically fixes the pandoc 3.9 variation-selector bug (U+FE0E after ↔) that renders missing glyphs (.LastResort) in the PDF. Use whenever the user asks to turn a .md file into a .pdf report or document.
+description: Convert Markdown documents to styled PDFs using pandoc + weasyprint with a clean A4 report layout (red headers, zebra tables, page numbers). Ships a branded Longhorn IP template for letters, reports, memos and meeting minutes. Automatically fixes the pandoc 3.9 variation-selector bug (U+FE0E after ↔) that renders missing glyphs (.LastResort) in the PDF. Use whenever the user asks to turn a .md file into a .pdf report or document.
 allowed-tools: read write edit bash
 compatibility: opencode
 ---
@@ -69,6 +69,35 @@ cp /path/to/your-style.css "$HOME/.agents/skills/md2pdf/style.css"
 ```
 
 Any valid CSS for print (`@page`, fonts, tables, headers…) works. Keep at least one `@page` rule and a readable font stack so the PDF stays A4 and clean.
+
+## 🏷️ Branded templates
+
+`templates/` holds ready-made brands that go beyond a CSS swap, because they also
+control the document structure (letterhead, recipient block, signature, meeting
+metadata). Each template is self-contained and documents itself.
+
+### Longhorn IP
+
+```bash
+T="$HOME/.agents/skills/md2pdf/templates/longhornip"
+
+"$T/build.py" body.md --type report  --title "Q3 status" --out q3.pdf
+"$T/build.py" body.md --type letter  --meta letter.json --out letter.pdf
+"$T/build.py" body.md --type memo    --meta memo.json   --out memo.pdf
+"$T/build.py" body.md --type minutes --meta minutes.json --out minutes.pdf
+```
+
+- Same pipeline as `md2pdf.sh` (pandoc → HTML → weasyprint), plus a branded wrapper.
+- Types: `report`, `letter`, `memo`, `minutes`, each with the right prelude and a
+  signature where appropriate.
+- Metadata from a JSON file (`--meta`) and/or flags; flags win.
+- Brand: logo `assets/logo.jpg`, gold `#d9b626`, brown `#6a593d`, sans-serif
+  (Helvetica Neue in the PDF). Colours live in `:root` at the top of `style.css`.
+- Full reference, including the JSON shape and every flag: `templates/longhornip/README.md`.
+- Worked examples: `templates/longhornip/examples/`.
+
+Use this template whenever the document carries Longhorn IP branding. Use plain
+`md2pdf.sh` for internal notes that need no letterhead.
 
 ## Layout of the bundled default style
 

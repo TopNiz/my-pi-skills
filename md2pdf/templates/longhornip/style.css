@@ -1,0 +1,306 @@
+/* ==========================================================================
+   Longhorn IP document style: A4 print, sans serif
+   Pairs with build.py (pandoc → HTML → weasyprint).
+   Brand tokens sampled from the logo: gold #d9b626, brown #6a593d.
+   ========================================================================== */
+
+:root {
+  --gold: #d9b626;
+  --brown: #6a593d;
+  --brown-dark: #4d412c;
+  --stripe: #faf7ef;
+  --border: #e6e1d5;
+  --grey: #6b7280;
+  --text: #262421;
+}
+
+@page {
+  size: A4;
+  margin: 16mm 15mm 19mm;
+
+  @bottom-left {
+    content: "Longhorn IP LLC · www.longhornip.com";
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 7.5pt;
+    color: #9a958c;
+  }
+
+  @bottom-right {
+    content: counter(page) " / " counter(pages);
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 7.5pt;
+    color: #9a958c;
+  }
+}
+
+/* First page of a letter carries no footer rule, keeps the letterhead clean */
+@page :first {
+  @bottom-left { content: ""; }
+  @bottom-right { content: ""; }
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue",
+    Helvetica, Arial, "DejaVu Sans", sans-serif;
+  font-size: 9.8pt;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+/* ------------------------------------------------------------------ brand */
+.brand {
+  padding-bottom: 8pt;
+  border-bottom: 2.5pt solid var(--gold);
+  margin-bottom: 16pt;
+}
+
+.brand img {
+  display: block;
+  width: 52mm;
+  height: auto;
+}
+
+.brand .tagline {
+  margin-top: 6pt;
+  font-size: 6.8pt;
+  letter-spacing: 1.6pt;
+  text-transform: uppercase;
+  color: var(--grey);
+}
+
+/* --------------------------------------------------------------- headings */
+h1 {
+  font-size: 17pt;
+  line-height: 1.2;
+  color: var(--brown-dark);
+  font-weight: 700;
+  margin: 0 0 2pt;
+}
+
+.subtitle {
+  font-size: 11pt;
+  color: var(--brown);
+  margin: 0 0 14pt;
+}
+
+h2 {
+  font-size: 12.5pt;
+  color: var(--brown-dark);
+  font-weight: 700;
+  margin: 16pt 0 6pt;
+  padding-left: 7pt;
+  border-left: 3pt solid var(--gold);
+  break-after: avoid;
+}
+
+h3 {
+  font-size: 10.5pt;
+  color: var(--brown);
+  font-weight: 700;
+  margin: 11pt 0 4pt;
+  break-after: avoid;
+}
+
+h4 {
+  font-size: 9.8pt;
+  color: var(--brown);
+  font-weight: 700;
+  margin: 9pt 0 3pt;
+  break-after: avoid;
+}
+
+p {
+  margin: 0 0 7pt;
+  orphans: 3;
+  widows: 3;
+}
+
+ul,
+ol {
+  margin: 0 0 8pt;
+  padding-left: 15pt;
+}
+
+li {
+  margin: 0 0 3pt;
+}
+
+strong {
+  color: #17150f;
+}
+
+a {
+  color: var(--brown);
+  text-decoration: none;
+}
+
+hr {
+  border: none;
+  border-top: 0.6pt solid var(--border);
+  margin: 12pt 0;
+}
+
+/* ---------------------------------------------------------------- tables */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8pt 0 14pt;
+  font-size: 8.8pt;
+}
+
+thead {
+  display: table-header-group;
+}
+
+th {
+  background: var(--brown);
+  color: #ffffff;
+  padding: 5pt 6pt;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 1.6pt solid var(--gold);
+}
+
+td {
+  padding: 4.5pt 6pt;
+  border-bottom: 0.5pt solid var(--border);
+  vertical-align: top;
+}
+
+tbody tr:nth-child(even) td {
+  background: var(--stripe);
+}
+
+tr {
+  break-inside: avoid;
+}
+
+/* Borderless key/value table, used for metadata blocks */
+table.meta {
+  font-size: 9pt;
+  margin: 0 0 14pt;
+}
+
+table.meta td {
+  border: none;
+  background: transparent !important;
+  padding: 1.5pt 0;
+}
+
+table.meta td.label {
+  width: 32mm;
+  color: var(--brown);
+  font-weight: 600;
+}
+
+/* ----------------------------------------------------------- blockquotes */
+blockquote {
+  margin: 8pt 0 12pt;
+  padding: 7pt 10pt;
+  border-left: 2.5pt solid var(--gold);
+  background: var(--stripe);
+  color: #3d3a33;
+}
+
+blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+/* ------------------------------------------------------------------ code */
+code {
+  font-family: Menlo, Consolas, monospace;
+  font-size: 8.3pt;
+  background: #f3f1ea;
+  padding: 0 2pt;
+  border-radius: 2pt;
+}
+
+pre {
+  background: #f7f5ef;
+  border: 0.5pt solid var(--border);
+  border-radius: 2pt;
+  padding: 7pt 8pt;
+  font-size: 8.1pt;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  break-inside: avoid;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+}
+
+/* --------------------------------------------------------------- letters */
+.doc-letter .recipient {
+  margin: 0 0 14pt;
+  font-size: 9.8pt;
+  line-height: 1.45;
+}
+
+.doc-letter .letter-meta {
+  margin: 0 0 16pt;
+  font-size: 8.8pt;
+  color: var(--grey);
+}
+
+.doc-letter .subject {
+  font-weight: 700;
+  color: var(--brown-dark);
+  margin: 0 0 12pt;
+}
+
+/* --------------------------------------------------------------- minutes */
+.doc-minutes .meeting-meta td.label {
+  width: 30mm;
+}
+
+/* -------------------------------------------------------------- signature */
+.signature {
+  margin-top: 22pt;
+  break-inside: avoid;
+}
+
+.signature .closing {
+  margin: 0 0 20pt;
+}
+
+.signature .name {
+  font-weight: 700;
+  color: var(--brown-dark);
+}
+
+.signature .role,
+.signature .org,
+.signature .contact {
+  font-size: 8.8pt;
+  color: #545454;
+  line-height: 1.45;
+}
+
+/* ------------------------------------------------------------- ai notice */
+.ai-note {
+  margin-top: 12pt;
+  font-size: 7.5pt;
+  color: #9a958c;
+}
+
+/* --------------------------------------------------------------- helpers */
+.small {
+  font-size: 8.4pt;
+  color: var(--grey);
+}
+
+.page-break {
+  break-before: page;
+}
+
+.avoid-break {
+  break-inside: avoid;
+}

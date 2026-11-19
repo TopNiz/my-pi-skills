@@ -1,0 +1,15 @@
+{
+  "type": "minutes",
+  "title": "L2 / Ox weekly status meeting",
+  "date": "14 October 2026",
+  "ref": "LHIP-MIN-2026-042",
+  "meeting": {
+    "date": "14 October 2026",
+    "time": "17:00 - 18:00 CET",
+    "location": "Microsoft Teams",
+    "chair": "Nizar Ayed",
+    "attendees": ["Nizar Ayed", "Khaled Fekih-Romdhane", "Nicholas Peters"],
+    "apologies": ["Ina Hagebaum"]
+  },
+  "closing": "Kind regards,"
+}
