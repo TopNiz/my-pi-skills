@@ -22,6 +22,44 @@ Manage a Rocket.Chat workspace through its REST API. The skill is built around a
 
 The skill uses the public HTTPS URL so it works outside the LAN. The internal bind is `192.168.0.6:3000`, not `localhost:3000`.
 
+## Home VPN access (macOS)
+
+The public REST API does not require the home VPN. SSH to the Docker host at
+`192.168.0.6` requires a route to the home network. If SSH times out, check the
+WireGuard connection before retrying.
+
+On this Mac, WireGuard is installed at `/Applications/WireGuard.app`. Its home
+VPN service ID is `D8091D93-50F2-43B0-87A4-38357FE784D7`.
+
+1. Check the service and connection state:
+
+```bash
+scutil --nc list
+scutil --nc status D8091D93-50F2-43B0-87A4-38357FE784D7 | head -n 1
+```
+
+2. If disconnected, activate it only with explicit user authorization:
+
+```bash
+scutil --nc start D8091D93-50F2-43B0-87A4-38357FE784D7
+sleep 3
+scutil --nc status D8091D93-50F2-43B0-87A4-38357FE784D7 | head -n 1
+```
+
+3. Confirm SSH access without opening an interactive session:
+
+```bash
+ssh -o BatchMode=yes -o ConnectTimeout=10 -o RemoteCommand=none \
+  -o RequestTTY=no -o ControlMaster=no -o ControlPath=none -o ForwardX11=no \
+  mac-ubuntu-server-2.local \
+  'docker ps --filter label=com.docker.compose.project=rocketchat --format "{{.Names}} {{.Image}}"'
+```
+
+Activation and SSH access were verified on this Mac. If the service ID is no
+longer listed, identify the home profile and ask the user if ownership is
+unclear. Do not activate an unrelated VPN, read or print WireGuard private
+keys, change tunnel settings, or disconnect a user-managed connection.
+
 ## Setup (one time)
 
 The skill authenticates as a dedicated admin bot, not as your personal account.
