@@ -14,7 +14,7 @@ Options:
   --max=N           Override max_emails from config
   --folder=FOLDER   Override folder (default: INBOX)
   --search=QUERY    Gmail search query (overrides date/folder filters)
-  --account=EMAIL   Fetch only one account (email address)
+  --account=EMAIL   Select a stored primary account; use all for every stored account
   --help            Show this message
 
 Output: JSON to stdout with structure:
@@ -48,7 +48,7 @@ from email.utils import parsedate_to_datetime
 
 # Local auth module
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from auth import get_service, get_account_email
+from auth import get_service, get_account_email, list_accounts
 
 CONFIG_PATH = sys.argv[1] if len(sys.argv) > 1 else None
 
@@ -357,13 +357,23 @@ def main():
     config = load_config(CONFIG_PATH)
     config = parse_args(config)
 
-    # Get authenticated Gmail API service
+    # Resolve explicit accounts before fetching any messages.
+    requested = config.get("_account")
+    if requested == "all":
+        selected_accounts = list_accounts()
+        if not selected_accounts:
+            print(json.dumps({"error": "No file-based accounts have been provisioned."}), file=sys.stderr)
+            sys.exit(1)
+    else:
+        selected_accounts = [requested]
+    services = []
     try:
-        service = get_service()
-        account_email = get_account_email(service)
-    except Exception as e:
+        for selected in selected_accounts:
+            service = get_service(account=selected)
+            services.append((service, get_account_email(service)))
+    except Exception as error:
         print(json.dumps({
-            "error": f"Authentication failed: {str(e)}. Run 'python3 scripts/auth.py' first."
+            "error": f"Authentication failed ({type(error).__name__}). Check the selected account with scripts/auth.py --check."
         }), file=sys.stderr)
         sys.exit(1)
 
@@ -378,18 +388,11 @@ def main():
 
     search_override = config.get("_search")
 
-    # Check if account is requested (single-account Gmail, so mostly for compat)
-    cli_account = config.get("_account")
-    if cli_account and cli_account.lower() != account_email.lower():
-        print(json.dumps({
-            "error": f"Authenticated as {account_email}, but --account={cli_account} requested."
-        }), file=sys.stderr)
-        sys.exit(1)
-
-    result = fetch_account_emails(service, account_email, filters, search_override)
-
-    # Wrap in multi-account format for backward compat
-    output = {"accounts": [result]}
+    results = [
+        fetch_account_emails(service, address, filters, search_override)
+        for service, address in services
+    ]
+    output = {"accounts": results}
     print(json.dumps(output, indent=2, ensure_ascii=False))
 
 

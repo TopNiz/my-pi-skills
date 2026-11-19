@@ -23,6 +23,51 @@ A complete email management workflow for pi. Fetches emails via the **Gmail API*
 
 ---
 
+## Current local configuration: separate file-based accounts
+
+This installation uses separate credential files for multiple Gmail accounts.
+This section takes precedence over the legacy single-account and native-store
+instructions below. Local and SSH sessions use the same files, without macOS
+Keychain access.
+
+- Shared OAuth client configuration: `accounts.gmail/credentials.gmail.json` in this skill folder.
+- Account tokens: `accounts.gmail/<primary-address>/token.gmail.json`.
+- Default account: `accounts.gmail/default-account.json`.
+- Credential directories use mode `0700`; credential files use mode `0600` on POSIX.
+- These are plaintext credentials protected by filesystem permissions, not encrypted files.
+  Do not commit, print, or upload them. Keep the skill folder on trusted storage.
+- Existing native-store entries remain untouched as a backup. Do not run `--migrate`.
+
+```bash
+# List provisioned accounts without showing credentials.
+python3 scripts/auth.py --list-accounts
+
+# Verify a specific account without reading messages.
+python3 scripts/auth.py --check --account=nizar@longhornip.com
+
+# Fetch one account, or explicitly fetch all provisioned accounts.
+python3 scripts/fetch_emails.py scripts/config.json --account=nizar@longhornip.com
+python3 scripts/fetch_emails.py scripts/config.json --account=all
+
+# Select an account for scripts that call get_service() without arguments.
+export PI_EMAIL_MANAGER_ACCOUNT=nizar@longhornip.com
+```
+
+Python callers can use `get_service(account="nizar@longhornip.com")`.
+No selection preserves the original mailbox as the default. An unknown account
+fails instead of falling back to another mailbox. The service verifies the primary
+mailbox address before returning an explicitly selected account.
+
+To add a new account, run `python3 scripts/auth.py --login --account=primary@example.com`
+from an interactive session. This command refuses to overwrite an existing account.
+Initial consent still needs a browser; subsequent refreshes work over SSH without one.
+Setting `PI_EMAIL_MANAGER_TOKEN_FILE` explicitly overrides the default token location;
+an explicit Python `account` argument or CLI `--account` selects its named account file.
+
+The Google OAuth app must permit each account. External apps in Testing normally
+issue Gmail refresh tokens that expire after seven days. Reauthorization or a suitable
+Production configuration is needed for continued access.
+
 ## 🚀 Quick Start (One-Time Setup)
 
 The Gmail API uses **OAuth2** — you authenticate once via your browser, and the token auto-refreshes.
@@ -328,6 +373,20 @@ When the user asks to draft any email — a reply, a new message, a report, a su
 7. **Wait for confirmation before sending** — Never send without explicit user approval.
 
 > The email-authoring skill handles **authoring style** (tone, greeting, language) and **presentation style** (HTML layout, structured templates, and signatures). The email-manager skill handles Gmail transport, fetching, draft creation, and sending safeguards.
+
+### Templated emails: recommend Gmail API sending
+
+Follow this workflow for every templated email:
+
+1. Create the Gmail draft and leave it in Drafts for the user to review. Do not send it yet.
+2. Tell the user: "The draft is ready for your review. I will wait for your explicit confirmation before sending it through Gmail. Please let me send it through the Gmail API rather than sending it manually through Apple Mail or another email app, which may rewrite the HTML and break the logos or layout."
+3. Wait for explicit send confirmation after review. A draft request, a successful review, or praise for the result is not permission to send.
+4. After confirmation, send the exact approved draft through the Gmail API or SDK, without routing it through another email app.
+
+- Apple Mail rewriting was observed with the Boxing Club Pantin and miXYtés templates, especially with PDF attachments: it split the HTML into separate MIME parts and detached logos from their HTML sizing and placement. Sending the test draft directly through Gmail worked in the user's test.
+- After explicit user confirmation, prefer `service.users().drafts().send(userId='me', body={'id': draft_id})` for the exact approved draft. Do not rebuild it or route it through a mail app's composer before sending.
+- Gmail can also normalize HTML and MIME structure when saving a draft. Inspect the saved source when fidelity matters; do not promise byte-identical preservation or identical rendering in every recipient's email app.
+- **Preparing a draft is not permission to send it.** Always obtain explicit user confirmation before executing any send.
 
 ---
 

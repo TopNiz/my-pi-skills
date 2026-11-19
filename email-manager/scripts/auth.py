@@ -1,22 +1,21 @@
 #!/usr/bin/env python3
-"""Gmail API OAuth2 credentials and their platform-specific stores.
+"""Gmail OAuth2 with separate file credentials for primary accounts.
 
-Store selection:
-  - macOS interactive: Keychain (``keyring``)
-  - macOS SSH       : JSON files next to this script
-  - Linux           : Secret Service via ``secret-tool``
-  - Windows         : a plain file, ``token.gmail.json`` next to this script
+When accounts.gmail/default-account.json exists, local and SSH sessions use
+private account token files and a shared client file without native-store
+access. Select a primary account through get_service(account=...), --account,
+or PI_EMAIL_MANAGER_ACCOUNT. No selection preserves the configured default.
 
-Windows never touches Credential Manager: sandboxed and non-interactive
-sessions cannot reach it (``WinError 1312``), so the refresh token always lives
-in the gitignored file store. On macOS/Linux, ``python3 scripts/auth.py
---migrate`` imports legacy local OAuth files into the native store.
+Without this configuration, legacy stores remain supported: macOS interactive
+Keychain, macOS SSH JSON files, Linux Secret Service/systemd credentials, and
+Windows JSON files. Native-store migration is disabled for configured accounts.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -98,11 +97,11 @@ if sys.platform == "darwin":
     try:
         import keyring
         from keyring.errors import KeyringError
-    except ImportError as error:  # pragma: no cover - environment setup error
-        raise SystemExit(
-            "Native credential-store support is unavailable. Run 'uv sync' in "
-            f"{SKILL_DIR} to create the skill venv from pyproject.toml."
-        ) from error
+    except ImportError:  # File-based accounts do not require keyring.
+        keyring = None
+
+        class KeyringError(Exception):
+            pass
 
 from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
@@ -120,6 +119,40 @@ LEGACY_TOKEN_FILE = SKILL_DIR / "token.gmail.json"
 # macOS/Linux it is opt-in:
 #   set PI_EMAIL_MANAGER_TOKEN_FILE=/path/to/token.gmail.json
 TOKEN_FILE_ENV = "PI_EMAIL_MANAGER_TOKEN_FILE"
+ACCOUNT_ENV = "PI_EMAIL_MANAGER_ACCOUNT"
+ACCOUNTS_DIR = SKILL_DIR / "accounts.gmail"
+MANAGED_CLIENT_FILE = ACCOUNTS_DIR / "credentials.gmail.json"
+DEFAULT_ACCOUNT_FILE = ACCOUNTS_DIR / "default-account.json"
+
+
+def _normalize_account(account: str) -> str:
+    account = account.strip().lower()
+    if not re.fullmatch(r"[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}", account):
+        raise CredentialStoreError("Use a primary Gmail account address, not a path or alias.")
+    return account
+
+
+def _default_account() -> str:
+    try:
+        data = json.loads(DEFAULT_ACCOUNT_FILE.read_text(encoding="utf-8"))
+        return _normalize_account(data["account"])
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise CredentialStoreError("The file-based default account configuration is invalid.") from error
+
+
+def _account_token_file(account: str) -> Path:
+    return ACCOUNTS_DIR / _normalize_account(account) / "token.gmail.json"
+
+
+def list_accounts() -> list[str]:
+    """List provisioned primary accounts without reading credential values."""
+    if not ACCOUNTS_DIR.is_dir():
+        return []
+    accounts = []
+    for directory in ACCOUNTS_DIR.iterdir():
+        if directory.is_dir() and (directory / "token.gmail.json").is_file():
+            accounts.append(_normalize_account(directory.name))
+    return sorted(accounts)
 
 
 class CredentialStoreError(RuntimeError):
@@ -160,6 +193,10 @@ def _file_secret_path(account: str) -> Path | None:
 
 
 def _get_secret(account: str) -> str | None:
+    if DEFAULT_ACCOUNT_FILE.is_file():
+        path = MANAGED_CLIENT_FILE if account == CLIENT_ACCOUNT else _token_file()
+        return path.read_text(encoding="utf-8") if path and path.is_file() else None
+
     systemd_path = _systemd_credential_path(account)
     if systemd_path:
         return systemd_path.read_text(encoding="utf-8")
@@ -176,6 +213,8 @@ def _get_secret(account: str) -> str | None:
         return path.read_text(encoding="utf-8") if path and path.is_file() else None
 
     if sys.platform == "darwin":
+        if keyring is None:
+            raise CredentialStoreError("Native credential storage requires the keyring package.")
         try:
             return keyring.get_password(KEYRING_SERVICE, account)
         except KeyringError as error:
@@ -202,15 +241,19 @@ def _store_hint(error: OSError) -> str:
 
 
 def _token_file() -> Path | None:
-    """Return the file-based token store, if one applies.
+    """Resolve a token override, selected account, default, or legacy file.
 
-    Windows always uses the file store (Credential Manager is unusable from
-    sandboxed/non-interactive sessions, WinError 1312). Elsewhere the file
-    store is used only when ``PI_EMAIL_MANAGER_TOKEN_FILE`` is set.
+    Configured accounts use the same files locally and over SSH. The explicit
+    token-file environment override takes precedence over implicit selection.
     """
     value = os.environ.get(TOKEN_FILE_ENV, "").strip()
     if value:
         return Path(value).expanduser()
+    selected_account = os.environ.get(ACCOUNT_ENV)
+    if selected_account:
+        return _account_token_file(selected_account)
+    if DEFAULT_ACCOUNT_FILE.is_file():
+        return _account_token_file(_default_account())
     if sys.platform == "darwin" and os.environ.get("SSH_CONNECTION"):
         return LEGACY_TOKEN_FILE
     if sys.platform == "win32":
@@ -226,17 +269,20 @@ def _write_token_file(path: Path, creds: Credentials) -> None:
     sandboxed agent or service account read it too. On POSIX the file is
     chmod 0600.
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(creds.to_json(), encoding="utf-8")
-    try:
-        os.chmod(path, 0o600)
-    except OSError:
-        pass
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if os.name != "nt":
+        os.chmod(path.parent, 0o700)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(path, flags, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        if os.name != "nt":
+            os.fchmod(handle.fileno(), 0o600)
+        handle.write(creds.to_json())
 
 
-def _store_credentials(creds: Credentials) -> None:
-    """Save credentials, never discarding a freshly authorized token."""
-    token_file = _token_file()
+def _store_credentials(creds: Credentials, token_file: Path | None = None) -> None:
+    """Save credentials to the selected account, never another account."""
+    token_file = token_file if token_file is not None else _token_file()
     if token_file is not None:
         _write_token_file(token_file, creds)
         return
@@ -269,6 +315,12 @@ def _store_credentials(creds: Credentials) -> None:
 
 
 def _set_secret(account: str, value: str) -> None:
+    if DEFAULT_ACCOUNT_FILE.is_file():
+        if account != TOKEN_ACCOUNT:
+            raise CredentialStoreError("Manage the shared OAuth client configuration as a private file.")
+        creds = Credentials.from_authorized_user_info(json.loads(value), SCOPES)
+        _write_token_file(_token_file(), creds)
+        return
     if _systemd_credential_path(account):
         raise CredentialStoreError("Systemd-encrypted credentials are read-only at runtime.")
 
@@ -284,6 +336,8 @@ def _set_secret(account: str, value: str) -> None:
         return
 
     if sys.platform == "darwin":
+        if keyring is None:
+            raise CredentialStoreError("Native credential storage requires the keyring package.")
         try:
             keyring.set_password(KEYRING_SERVICE, account, value)
         except KeyringError as error:
@@ -345,22 +399,20 @@ def migrate_legacy_files() -> bool:
     return True
 
 
-def get_credentials() -> Credentials:
-    """Return valid Gmail OAuth credentials.
+def get_credentials(account: str | None = None) -> Credentials:
+    """Return valid credentials for one primary account.
 
-    Token source order: the file store named by ``PI_EMAIL_MANAGER_TOKEN_FILE``
-    (if set), then the OS credential store. The file store exists because
-    non-interactive sessions (services, sandboxed agents) cannot use Windows
-    Credential Manager at all.
+    An explicit account selects its own file without fallback. Otherwise use
+    the token-file override, account environment variable, configured default,
+    or the legacy platform store. File-based accounts never require Keychain.
     """
     token_info = None
-    token_file = _token_file()
+    token_file = _account_token_file(account) if account else _token_file()
     if token_file is not None:
         if not token_file.is_file():
             raise CredentialStoreError(
-                f"{TOKEN_FILE_ENV} points at {token_file}, which does not exist. "
-                "Create it with 'python scripts/auth.py --export <path>' from a "
-                "machine that is already authenticated."
+                "The selected account token file does not exist. "
+                "Authorize it with 'python scripts/auth.py --login --account=primary@example.com'."
             )
         try:
             token_info = json.loads(token_file.read_text(encoding="utf-8"))
@@ -379,21 +431,30 @@ def get_credentials() -> Credentials:
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
-            _store_credentials(creds)
+            _store_credentials(creds, token_file=token_file)
         else:
             client_config = _load_json_secret(CLIENT_ACCOUNT)
             flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
             callback_port = int(os.environ.get("PI_EMAIL_OAUTH_PORT", "0"))
             open_browser = os.environ.get("PI_EMAIL_OAUTH_OPEN_BROWSER", "1") != "0"
-            creds = flow.run_local_server(port=callback_port, open_browser=open_browser)
-            _store_credentials(creds)
+            creds = flow.run_local_server(
+                port=callback_port, open_browser=open_browser,
+                authorization_prompt_message="Open the Google sign-in window to authorize access.",
+            )
+            _store_credentials(creds, token_file=token_file)
 
     return creds
 
 
-def get_service():
-    """Return an authenticated Gmail API service."""
-    return build("gmail", "v1", credentials=get_credentials())
+def get_service(account: str | None = None):
+    """Return a Gmail service and verify any selected primary account."""
+    selected = account or os.environ.get(ACCOUNT_ENV)
+    if not selected and DEFAULT_ACCOUNT_FILE.is_file() and not os.environ.get(TOKEN_FILE_ENV):
+        selected = _default_account()
+    service = build("gmail", "v1", credentials=get_credentials(account=account))
+    if selected and get_account_email(service).lower() != _normalize_account(selected):
+        raise CredentialStoreError("The stored credentials do not match the selected primary account.")
+    return service
 
 
 def get_account_email(service) -> str:
@@ -410,7 +471,7 @@ def _report_refresh_failure() -> int:
     return 1
 
 
-def _check() -> int:
+def _check(account: str | None = None) -> int:
     """Verify the credentials and report the authenticated address.
 
     Loads the stored credentials, then resolves the mailbox with
@@ -420,10 +481,10 @@ def _check() -> int:
     Gmail API; 1 means the refresh token is missing, rejected, or the API could
     not be reached.
     """
-    store = "file token store" if _token_file() is not None else "native credential storage"
+    store = "file token store" if account or _token_file() is not None else "native credential storage"
 
     try:
-        get_credentials()
+        get_credentials(account=account)
     except RefreshError:
         return _report_refresh_failure()
     except CredentialStoreError as error:
@@ -436,7 +497,7 @@ def _check() -> int:
         return 1
 
     try:
-        account_email = get_account_email(get_service())
+        account_email = get_account_email(get_service(account=account))
     except RefreshError:
         return _report_refresh_failure()
     except Exception as error:
@@ -476,7 +537,9 @@ def _diagnose() -> int:
     print(f"OS user             : {os.environ.get('USERNAME') or os.environ.get('USER', '?')}")
     print(f"skill dir           : {SKILL_DIR}")
 
-    if sys.platform == "darwin":
+    if DEFAULT_ACCOUNT_FILE.is_file():
+        print("credential store    : separate account files (no native-store access)")
+    elif sys.platform == "darwin":
         try:
             import keyring
 
@@ -519,9 +582,10 @@ def _diagnose() -> int:
             token_value = value
 
     client_ok = False
-    if LEGACY_CLIENT_FILE.is_file():
+    client_file = MANAGED_CLIENT_FILE if DEFAULT_ACCOUNT_FILE.is_file() else LEGACY_CLIENT_FILE
+    if client_file.is_file():
         try:
-            with LEGACY_CLIENT_FILE.open(encoding="utf-8") as handle:
+            with client_file.open(encoding="utf-8") as handle:
                 json.load(handle)
             client_state = "present, readable, valid JSON"
             client_ok = True
@@ -531,7 +595,7 @@ def _diagnose() -> int:
             client_state = "present but not valid JSON"
     else:
         client_state = "ABSENT"
-    print(f"file client-config  : {LEGACY_CLIENT_FILE}")
+    print(f"file client-config  : {client_file}")
     print(f"{'':<20}  {client_state}")
 
     print("-" * 62)
@@ -577,8 +641,7 @@ def _diagnose() -> int:
             print(f"RESULT: token present but refresh FAILED: {type(error).__name__}: {error}")
             print("        Revoked or expired? Re-run: python3 scripts/auth.py")
             return 1
-        if not _systemd_credential_path(TOKEN_ACCOUNT):
-            _set_secret(TOKEN_ACCOUNT, creds.to_json())
+        _store_credentials(creds)
         print("RESULT: refresh token present, access token renewed. OK.")
         return 0
 
@@ -586,7 +649,7 @@ def _diagnose() -> int:
     return 1
 
 
-def _export(destination: str) -> int:
+def _export(destination: str, account: str | None = None) -> int:
     """Write the stored OAuth credentials to a file, to provision another host.
 
     The file contains a refresh token, so it is a secret: transfer it over a
@@ -597,8 +660,12 @@ def _export(destination: str) -> int:
         print(f"Refusing to overwrite existing file: {target}", file=sys.stderr)
         return 1
     try:
-        value = _get_secret(TOKEN_ACCOUNT)
-    except CredentialStoreError as error:
+        if account:
+            source = _account_token_file(account)
+            value = source.read_text(encoding="utf-8") if source.is_file() else None
+        else:
+            value = _get_secret(TOKEN_ACCOUNT)
+    except (CredentialStoreError, OSError) as error:
         print(f"Cannot read the credential store: {error}", file=sys.stderr)
         return 1
     if not value:
@@ -627,8 +694,54 @@ def _export(destination: str) -> int:
     return 0
 
 
+def _login_account(account: str) -> int:
+    """Authorize a new named account without replacing an existing token."""
+    account = _normalize_account(account)
+    destination = _account_token_file(account)
+    if destination.exists():
+        print("Account already exists. Use --check with --account to verify it.", file=sys.stderr)
+        return 1
+    client_config = _load_json_secret(CLIENT_ACCOUNT)
+    flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
+    creds = flow.run_local_server(
+        port=int(os.environ.get("PI_EMAIL_OAUTH_PORT", "0")),
+        open_browser=os.environ.get("PI_EMAIL_OAUTH_OPEN_BROWSER", "1") != "0",
+        authorization_prompt_message="Complete Google sign-in in the browser window.",
+        timeout_seconds=int(os.environ.get("PI_EMAIL_OAUTH_TIMEOUT", "180")),
+        login_hint=account, prompt="select_account consent",
+    )
+    service = build("gmail", "v1", credentials=creds)
+    if get_account_email(service).lower() != account:
+        print("Google authorized a different primary account. Nothing was saved.", file=sys.stderr)
+        return 1
+    _write_token_file(destination, creds)
+    print(f"Saved authorization for {account} in the separate file token store.")
+    return 0
+
+
 def main(argv: list[str]) -> int:
+    account = None
+    for index, arg in enumerate(argv):
+        if arg.startswith("--account="):
+            account = _normalize_account(arg.split("=", 1)[1])
+        elif arg == "--account" and index + 1 < len(argv):
+            account = _normalize_account(argv[index + 1])
+
+    if "--list-accounts" in argv:
+        for address in list_accounts():
+            print(address)
+        return 0
+
+    if "--login" in argv:
+        if not account:
+            print("Usage: auth.py --login --account=primary@example.com", file=sys.stderr)
+            return 1
+        return _login_account(account)
+
     if "--migrate" in argv:
+        if DEFAULT_ACCOUNT_FILE.is_file():
+            print("File-based accounts are enabled. Native-store migration is disabled.", file=sys.stderr)
+            return 1
         if sys.platform == "win32":
             print("Windows stores Gmail credentials in token.gmail.json; nothing to migrate.")
             return 0
@@ -641,7 +754,7 @@ def main(argv: list[str]) -> int:
         return 0
 
     if "--check" in argv:
-        return _check()
+        return _check(account=account)
 
     if "--diagnose" in argv:
         return _diagnose()
@@ -651,12 +764,12 @@ def main(argv: list[str]) -> int:
             if index + 1 >= len(argv):
                 print("Usage: auth.py --export <path>", file=sys.stderr)
                 return 1
-            return _export(argv[index + 1])
+            return _export(argv[index + 1], account=account)
         if arg.startswith("--export="):
-            return _export(arg.split("=", 1)[1])
+            return _export(arg.split("=", 1)[1], account=account)
 
     try:
-        service = get_service()
+        service = get_service(account=account)
         print(f"Authenticated as {get_account_email(service)}.")
     except CredentialStoreError as error:
         print(f"Authentication unavailable: {error}", file=sys.stderr)
