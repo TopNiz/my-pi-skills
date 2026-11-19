@@ -308,6 +308,305 @@ scw billing consumption list
 
 ---
 
+## Resource-scoped cost estimation and billing reconciliation
+
+For general cost or monthly billing requests, list the cost items first, then offer details on a selected item. Do not require an Instance ID before showing the billing overview. Reuse the code below instead of rebuilding billing or pricing lookups for each request. Cost inspection is read-only; it never authorizes provisioning, shutdown, deletion, or changes to local files.
+
+### Default workflow: cost items first, details on request
+
+1. Use the requested billing month and year. Resolve an unclear year from conversation context or ask. Use the existing `scw` login and configured organization; no CRM, spawner, `.env` or custom project configuration is needed.
+2. For an organization-wide request, query monthly consumption without a project filter and retrieve all pages. Do not silently use `scw billing consumption list` defaults: the CLI can apply its default project and omit other projects.
+3. Present a concise table of product/cost items with amounts and currency before tax. Include negative deductions/credits. Report zero-cost items, either in the table or in a separate short list.
+4. Show the subtotal, provider-reported taxes when available, and the total including tax. Do not recalculate tax from a percentage: provider line-level rounding can produce a different amount. If tax lookup fails, say it is unavailable rather than inventing zero.
+5. State the organization/project scope and billing period. Label the amounts as recorded consumption, not a price estimate or final invoice; billing can lag. Do not expose credentials or operational IDs.
+6. End with: **"Would you like more detail on one item, for example a past or running instance?"** Then wait. Do not automatically inventory servers, inspect project files, or run per-Instance estimates after listing costs.
+7. Once the user selects an item, use the detail workflow below. Ask for a resource name/ID only if the selected billing item does not identify a unique resource. An explicit request for details on an already named resource counts as selection; keep that lookup scoped rather than listing unrelated organization costs.
+
+**Attribution limit:** Monthly billing includes consumption from both past and current resources, but the returned cost items are often aggregated product/SKU totals. They are not a complete inventory of individual past and running Instances. Never claim that one DEV1-M billing line identifies one VM, or that all historical VM identities can be recovered from it. Deleted-resource details require saved inventory, usage history, or other available billing evidence. Do not recreate a resource to obtain an estimate.
+
+### Reusable organization-wide monthly cost listing
+
+Replace `YYYY-MM` with the requested period. This reads billing only, uses the configured `scw` organization, and applies no project filter. Format the returned cost items as a table and ask the follow-up question above; do not proceed to resource inspection without selection.
+
+```bash
+python3 - YYYY-MM <<'PY'
+import json
+import re
+import subprocess
+import sys
+import urllib.parse
+import urllib.request
+from collections import defaultdict
+from decimal import Decimal
+
+
+def cli(*args):
+    result = subprocess.run(
+        ['scw', *args], capture_output=True, text=True, timeout=60,
+    )
+    if result.returncode or not result.stdout.strip():
+        raise ValueError('CLI lookup failed')
+    return result.stdout.strip()
+
+
+def money(value):
+    return Decimal(str(value.get('units', 0))) + (
+        Decimal(str(value.get('nanos', 0))) / Decimal(10**9)
+    )
+
+
+try:
+    period = sys.argv[1]
+    if not re.fullmatch(r'\d{4}-(0[1-9]|1[0-2])', period):
+        raise ValueError('Expected YYYY-MM')
+    organization = cli('config', 'get', 'default-organization-id')
+    secret = cli('config', 'get', 'secret-key')
+    rows = []
+    for page in range(1, 101):
+        query = urllib.parse.urlencode({
+            'organization_id': organization, 'billing_period': period,
+            'page': page, 'page_size': 100,
+        })
+        request = urllib.request.Request(
+            'https://api.scaleway.com/billing/v2beta1/consumptions?' + query,
+            headers={'X-Auth-Token': secret, 'Accept': 'application/json'},
+        )
+        with urllib.request.urlopen(request, timeout=60) as response:
+            payload = json.load(response, parse_float=Decimal)
+        batch = payload['consumptions']
+        rows.extend(batch)
+        count = payload.get('total_count')
+        if count is not None and len(rows) >= int(count):
+            break
+        if len(batch) < 100:
+            if count is not None and len(rows) < int(count):
+                raise ValueError('Incomplete billing pagination')
+            break
+    else:
+        raise ValueError('Billing pagination limit exceeded')
+    grouped = defaultdict(Decimal)
+    totals = defaultdict(Decimal)
+    for row in rows:
+        value = row['value']
+        currency = value['currency_code']
+        amount = money(value)
+        key = (row.get('category_name', 'Other'),
+               row.get('product_name', 'Unnamed'),
+               row.get('resource_name', ''), currency)
+        grouped[key] += amount
+        totals[currency] += amount
+    print(f'Recorded consumption for {period}; configured organization, all projects.')
+    for (category, product, description, currency), amount in sorted(grouped.items()):
+        print(json.dumps({'category': category, 'item': product,
+                          'description': description, 'amount': str(amount),
+                          'currency': currency}, ensure_ascii=False))
+    for currency, subtotal in sorted(totals.items()):
+        print(f'Subtotal before tax: {subtotal:.2f} {currency}')
+    try:
+        payload = json.loads(cli('billing', 'consumption', 'list-taxes',
+                                f'organization-id={organization}',
+                                f'billing-period={period}', '-o', 'json'),
+                             parse_float=Decimal)
+        taxes = payload['taxes'] if isinstance(payload, dict) else payload
+        if not taxes:
+            raise ValueError('No tax lines returned')
+        tax_totals = defaultdict(Decimal)
+        for tax in taxes:
+            value = tax['total_tax_value']
+            amount = money(value) if isinstance(value, dict) else Decimal(str(value))
+            currency = tax['currency']
+            tax_totals[currency] += amount
+            rate = Decimal(str(tax['rate'])) * 100
+            print(f'Provider-reported tax ({rate}%): {amount:.2f} {currency}')
+        for currency, subtotal in sorted(totals.items()):
+            if currency in tax_totals:
+                print(f'Total including tax: {subtotal + tax_totals[currency]:.2f} {currency}')
+            else:
+                print(f'Tax amount unavailable for {currency}; no tax-inclusive total.')
+    except Exception:
+        print('Tax amount unavailable; subtotals exclude tax.')
+    print('Recorded consumption can lag and is not a final invoice.')
+except Exception:
+    raise SystemExit('Monthly cost lookup failed; verify period and CLI access. '
+                     'No credentials or raw provider diagnostics displayed.') from None
+PY
+```
+
+### Item detail workflow (after selection)
+
+1. Identify the exact approved project, zone, service and resource IDs. Verify ownership before any separately authorized decommission.
+2. Before deletion or inventory scrubbing, capture resource creation timestamps, actual disk sizes in bytes, VM power history if available, and the start/end of each billable allocation. Keep operational IDs private. Do not assume the planned disk size equals the allocated size.
+3. Fetch current public retail prices once with `scw product-catalog product list zone=<instance-zone> -o json`. Capture and parse the output; select exact SKUs. Filtering only by Instance/Block Storage product type can omit local SSD and IPv4 prices.
+4. When requested, read consumption with `scw billing consumption list project-id=<instance-project> billing-period=YYYY-MM -o json`. Derive the project from the inspected Instance, not from a project-specific config file. Keep this separate from the resource-specific estimate.
+5. Report the runtime, component estimates, currency, tax treatment, rate source and any billing limitations. Prefer a concise answer. Do not delay an authorized cleanup while researching billing.
+
+### Calculation and attribution rules
+
+- Convert Scaleway money using `Decimal(units) + Decimal(nanos) / 1_000_000_000`. Do not use binary floating point for money.
+- Convert provider storage sizes to decimal GB using `bytes / 1_000_000_000`, not GiB. Multiply each quantity by its verified unit price and billable duration. Round the final currency total once.
+- VM compute, boot storage, Block Storage and reserved IPv4 are separate chargeable components. VM poweroff does not end storage/IP allocation charges. Include other owned chargeable resources if present.
+- Confirm the price's billing cadence as well as its quantity unit. For the template below, compute is per hour, local SSD and SBS 5K/15K are per GB-hour, and flexible IPv4 is per IP-hour. Catalog quantity units can say only `gigabyte` or `ip`; do not infer the time basis from that label alone.
+- Current catalog prices give a retail estimate, not a historical invoice. Rate changes, discounts, credits, provider rounding, taxes and other chargeable resources can change the final amount. Do not reuse old plan prices without checking them.
+- Use each resource's actual billable interval when available. A common allocation-to-cleanup interval is only an approximation; compute can stop earlier, and a disk/IP can be allocated before VM creation. Record that limitation.
+- Monthly consumption can combine several runs and unrelated resources with the same SKU. A field named `consumer_id` is not proof of a per-resource charge. Unless exact resource attribution is established, label the result as a project/month product total, never as this Instance's actual cost.
+- Do not infer hourly prices from rounded monthly amounts or blindly interpret consumption quantity/unit labels. Use the product catalog and documented billing semantics. Repeat monthly queries when a run crosses billing periods.
+- Explicitly distinguish **estimated resource cost**, **recorded monthly consumption**, and **final invoiced amount**. Billing can lag behind deletion. Never claim zero cost merely because resources are absent.
+
+### Portable Instance estimator: no project files
+
+Use the self-contained code below from any directory. It needs Python 3 and an authenticated `scw` CLI only. It does not read CRM files, `.env` files, a spawner repository, or custom environment variables.
+
+Replace `INSTANCE_ID` with the exact approved Instance UUID. The zone defaults to the existing `scw` configuration; add `--zone fr-par-1` if needed. `--hours` defaults to a 24-hour continuous-running projection. Set a different duration for another projection or a known historical interval. Add `--billing-period YYYY-MM` only when project/month consumption is also requested.
+
+The code discovers the Instance type, project, attached disk sizes/classes, and attached public IPv4 count through read-only provider calls. It supports local SSD and SBS 5K/15K volumes. It rejects unsupported storage or missing/ambiguous prices rather than silently omitting charges. Unattached resources, snapshots, backups, bandwidth and other services are outside this attached-resource estimate.
+
+**Limits:** A deleted Instance cannot be inspected. Historical estimates then require saved resource quantities and billable intervals. Current metadata does not reconstruct prior power states, resizing or rate changes. There is no universal exact-cost calculation without that history; never present a projection as a final invoice.
+
+```bash
+python3 - INSTANCE_ID --hours 24 <<'PY'
+import argparse
+import ipaddress
+import json
+import re
+import subprocess
+from decimal import Decimal, ROUND_HALF_UP
+from uuid import UUID
+
+
+def scw_json(*args):
+    result = subprocess.run(
+        ['scw', *args, '-o', 'json'],
+        capture_output=True, text=True, timeout=90,
+    )
+    if result.returncode:
+        raise ValueError('Provider lookup failed')
+    return json.loads(result.stdout)
+
+
+def money(value):
+    return Decimal(str(value.get('units', 0))) + (
+        Decimal(str(value.get('nanos', 0))) / Decimal(10**9)
+    )
+
+
+parser = argparse.ArgumentParser(description='Read-only Instance retail estimate')
+parser.add_argument('instance_id')
+parser.add_argument('--zone')
+parser.add_argument('--hours', default='24')
+parser.add_argument('--billing-period')
+args = parser.parse_args()
+try:
+    instance_id = str(UUID(args.instance_id))
+    hours = Decimal(args.hours)
+    if not hours.is_finite() or hours <= 0:
+        raise ValueError('Positive finite duration required')
+    if args.billing_period and not re.fullmatch(r'\d{4}-(0[1-9]|1[0-2])', args.billing_period):
+        raise ValueError('Invalid billing period')
+    zone_arg = [f'zone={args.zone}'] if args.zone else []
+    payload = scw_json('instance', 'server', 'get', instance_id, *zone_arg)
+    server = payload.get('server', payload)
+    if server['id'] != instance_id:
+        raise ValueError('Instance identity mismatch')
+    zone = server['zone']
+    if args.zone and zone != args.zone:
+        raise ValueError('Instance zone mismatch')
+    project = str(UUID(server.get('project') or server['project_id']))
+    payload = scw_json('product-catalog', 'product', 'list', f'zone={zone}')
+    products = payload['products'] if isinstance(payload, dict) else payload
+    compute = [p for p in products if
+               ((p.get('properties') or {}).get('instance') or {}).get('offer_id')
+               == server['commercial_type']]
+    if len(compute) != 1:
+        raise ValueError('Compute price missing or ambiguous')
+    components = [('Compute', compute[0]['sku'], Decimal(1), 'hour')]
+    disks = server['volumes']
+    if not disks or len({v['id'] for v in disks.values()}) != len(disks):
+        raise ValueError('Missing or ambiguous disk inventory')
+    for disk in disks.values():
+        kind = disk['volume_type']
+        if kind == 'l_ssd':
+            size = Decimal(str(disk['size'])) / Decimal(10**9)
+            sku = f'/instance/volume/l_ssd/{zone}'
+            label = 'Local SSD'
+        elif kind == 'sbs_volume':
+            payload = scw_json('block', 'volume', 'get', disk['id'], f'zone={zone}')
+            volume = payload.get('volume', payload)
+            if volume['id'] != disk['id'] or volume['project_id'] != project:
+                raise ValueError('Block volume identity/project mismatch')
+            tier = {5000: '5k', 15000: '15k'}.get(volume['perf_iops'])
+            if tier is None:
+                raise ValueError('Unsupported Block Storage performance class')
+            size = Decimal(str(volume['size'])) / Decimal(10**9)
+            sku = f'/storage/block/volume-low-latency-{tier}/{zone}'
+            label = f'SBS {tier.upper()}'
+        else:
+            raise ValueError('Unsupported disk type')
+        if not size.is_finite() or size <= 0:
+            raise ValueError('Invalid disk size')
+        components.append((f'{label} ({size} GB)', sku, size, 'gigabyte'))
+    addresses = list(server.get('public_ips') or [])
+    if server.get('public_ip'):
+        addresses.append(server['public_ip'])
+    ipv4 = {ip['address'] for ip in addresses
+            if ipaddress.ip_address(ip['address']).version == 4}
+    if ipv4:
+        components.append(('Public IPv4', f'/network/ipam/ipv4/{zone}',
+                           Decimal(len(ipv4)), 'ip'))
+    lines = []
+    total = Decimal(0)
+    currency = None
+    for label, sku, quantity, unit in components:
+        matches = [p for p in products if p.get('sku') == sku]
+        if len(matches) != 1:
+            raise ValueError('Price missing or ambiguous')
+        product = matches[0]
+        measure = product['unit_of_measure']
+        scale = Decimal(str(measure['size']))
+        if measure['unit'] != unit or not scale.is_finite() or scale <= 0:
+            raise ValueError('Verify price units before estimating')
+        price = product['price']['retail_price']
+        code = price['currency_code']
+        if currency is not None and currency != code:
+            raise ValueError('Mixed currencies')
+        currency = code
+        rate = money(price) / scale
+        if not rate.is_finite() or rate < 0:
+            raise ValueError('Invalid price')
+        cost = rate * quantity * hours
+        total += cost
+        lines.append(f'{label}: {cost:.6f} {currency}, estimated before tax')
+    print('\n'.join(lines))
+    rounded = total.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    print(f'Estimated total for {hours} continuous-running hours: '
+          f'{rounded} {currency} before tax')
+    print('Current attached resources and current retail rates; not a final invoice.')
+    if args.billing_period:
+        try:
+            payload = scw_json('billing', 'consumption', 'list',
+                               f'project-id={project}',
+                               f'billing-period={args.billing_period}')
+            rows = payload['consumptions'] if isinstance(payload, dict) else payload
+            skus = {sku for _, sku, _, _ in components}
+            print(f'Project/month consumption ({args.billing_period}):')
+            for row in rows:
+                if row.get('sku') in skus:
+                    value = row['value']
+                    print(f"{row['product_name']}: {money(value):.2f} "
+                          f"{value['currency_code']}")
+            print('Monthly amounts are not attributed to this Instance alone.')
+        except Exception:
+            print('Monthly billing lookup failed; estimate is not an invoice.')
+except Exception:
+    raise SystemExit('Estimation failed: verify Instance ID/zone, access, '
+                     'duration, supported storage and catalog prices. '
+                     'No credentials or raw provider diagnostics displayed.') from None
+PY
+```
+
+Capture provider subprocess output rather than forwarding raw errors. Never print environment dumps, authentication headers, credentials or private run identifiers. Missing or ambiguous prices must stop the estimate rather than silently use an old rate.
+
+---
+
 ## Pi Agent Integration
 
 > See [`pi-setup.md`](./pi-setup.md) for the complete guide on using Scaleway LLMs inside pi.
