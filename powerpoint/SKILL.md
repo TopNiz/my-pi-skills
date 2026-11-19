@@ -28,9 +28,28 @@ Run the helper scripts with that interpreter (`uv run python scripts/build_from_
 6. **Do not add unnecessary shapes.** A free-form text box is acceptable only when the chosen layout has no suitable placeholder, notably `Blank` or `Title Only`.
 7. **Validate visually.** Export at least the slide being worked on to an image in a temporary directory and inspect it before reporting completion.
 
-## Reference templates (local, configured — never shipped)
+## Main template: Chain-IT (default)
 
-The decks used as geometry and typography references are **not part of this
+The main/default Chain-IT presentation template is bundled with this skill at
+[assets/templates/Chain-IT-Presentation-Template.pptx](assets/templates/Chain-IT-Presentation-Template.pptx).
+
+Use this template for new presentations when the user does not specify another
+template or provide an existing target deck. Preserve its Chain-IT branding,
+masters, layouts, theme, and placeholder styles. Work from a copy; do not modify
+the bundled template.
+
+For the builder, pass its absolute path with `--template`, resolved from this
+skill's directory. Do not use a bare filename for this bundled template, because
+bare filenames resolve inside `POWERPOINT_TEMPLATES_DIR`. No external template
+directory is required for the bundled Chain-IT template.
+
+An explicit user template or an existing target deck takes precedence over this
+default. The third-party reference restrictions below do not apply to this
+Chain-IT template when creating Chain-IT-branded presentations.
+
+## Third-party reference templates (local configuration only)
+
+The third-party decks listed in this section are **not part of this
 skill** and are never committed, shipped or advertised. They are third-party
 branded templates whose redistribution is not permitted. They live outside the
 repository, in a directory each machine configures in the skill-local `.env`:
@@ -52,8 +71,8 @@ layout composition, geometry, palette and typography, then apply what you learn
 to the user's own deck. Never hand a template deck to the user as output, and
 never import its text, logo or photography (see the provenance rule below).
 
-What *is* committed, and remains useful even where the decks are absent, is this
-skill's own analysis: the per-slide pattern descriptions in
+For these third-party decks, only this skill's own analysis is committed and
+remains useful even where the decks are absent: the per-slide pattern descriptions in
 [assets/templates/](assets/templates/) and the matching catalog.
 
 Decks this library draws on, when present in the configured directory:
