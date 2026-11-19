@@ -2,6 +2,8 @@ services:
   speedtest:
     image: rg.fr-par.scw.cloud/chain-it/internet-speedtest:prod
     container_name: internet-speedtest
+    environment:
+      SPEEDTEST_ALLOWED_ORIGINS: http://127.0.0.1:63035,http://localhost:63035
     restart: unless-stopped
     ports:
       - "127.0.0.1:18010:8080"
