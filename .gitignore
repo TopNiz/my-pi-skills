@@ -27,3 +27,6 @@ email-manager/invoices/
 # must never be committed (see powerpoint/.env.example).
 powerpoint/assets/templates/*.pptx
 powerpoint/assets/templates/*.key
+
+# Private, recoverable trash storage and restore records
+/trash-files/.trash/
