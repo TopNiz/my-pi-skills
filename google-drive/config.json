@@ -1,0 +1,8 @@
+{
+  "default_account": "person@example.com",
+  "credentials_dir": "./accounts.drive",
+  "oauth_client_file": "./accounts.drive/credentials.drive.json",
+  "accounts": {
+    "person@example.com": {}
+  }
+}

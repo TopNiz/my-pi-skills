@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+config.local.json
+accounts/
+accounts.drive/
+credentials/
+token*.json
+credentials*.json
+.env
