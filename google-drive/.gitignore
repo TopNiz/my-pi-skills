@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
-.venv/
+/.venv/
+/uv.lock
 config.local.json
 accounts/
 accounts.drive/
