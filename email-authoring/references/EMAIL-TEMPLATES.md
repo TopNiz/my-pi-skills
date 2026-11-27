@@ -1,173 +1,59 @@
-# 📧 Email Content Templates
+# Email Layout Templates
 
-Standard HTML templates for email body content — tables, headings, formatting.
-Use these when drafting structured emails (invoices, reports, data comparisons, etc.).
+## Required defaults for every email
 
----
+Select the template from the verified sending account before creating or updating a draft:
 
-## 🎨 Base Stylesheet
+| Sending account | HTML template, relative to this reference |
+|---|---|
+| `nizar@longhornip.com` | `../../email-manager/references/LONGHORNIP-EMAIL-TEMPLATE.html` |
+| `nizar.ayed@chain-it.com` | `../../email-manager/references/CHAINIT-EMAIL-TEMPLATE.html` |
 
-Embed this `<style>` block in the `<head>` of every HTML email that uses tables or structured content.
+These defaults apply to new messages, replies, forwards, and short emails without tables. Do not use an unbranded fallback or select branding from the recipient. Explicit user requests for another layout take priority. The dedicated miXYtes layout remains available for user-identified miXYtes messages.
 
-```html
-<style>
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-    line-height: 1.6;
-    color: #333;
-  }
-  .container {
-    max-width: 600px;
-    margin: 0 auto;
-    padding: 20px;
-  }
-  h2 {
-    color: #2563eb;
-    font-size: 16px;
-    margin: 20px 0 10px;
-  }
-  table {
-    border-collapse: collapse;
-    width: 100%;
-    margin: 10px 0 15px;
-  }
-  th {
-    background: #2563eb;
-    color: white;
-    padding: 8px 12px;
-    text-align: left;
-    font-weight: 600;
-  }
-  td {
-    padding: 8px 12px;
-    border-bottom: 1px solid #e5e7eb;
-  }
-  tr:nth-child(even) td {
-    background: #f9fafb;
-  }
-  .total {
-    font-weight: bold;
-    color: #dc2626;
-    font-size: 1.1em;
-  }
-</style>
-```
+## Layout assembly
 
-### Color reference
+1. Read the selected HTML template in full.
+2. Fill its placeholders. Escape text values with an HTML escaping function. Only `CONTENT_HTML` and `SIGNATURE_HTML` accept trusted HTML.
+3. Keep the template's logo, colors, dimensions, spacing, header, and footer. Do not replace one account's brand with the other's.
+4. Insert only the content requested by the user. Paragraphs and lists are sufficient for short messages. Do not add explanations, requests, or sections merely to fill the layout.
+5. Use the account-specific signature in `STYLE-GUIDE.md`. Do not insert Chain-IT contact details into a Longhorn IP email.
+6. Use inline styles for essential formatting. Media queries can supplement them.
+7. Verify that no unresolved placeholders remain in the assembled HTML.
 
-| Token | Hex | Usage |
-|-------|-----|-------|
-| `--blue` | `#2563eb` | Table headers, section titles |
-| `--red` | `#dc2626` | Totals, amounts due |
-| `--border` | `#e5e7eb` | Table row borders |
-| `--stripe` | `#f9fafb` | Alternating row background |
-| `--text` | `#333` | Body text |
+### Placeholder values
 
----
+Both templates use `LANG`, `SUBJECT`, `TITLE`, `CONTENT_HTML`, and `SIGNATURE_HTML`.
 
-## 📊 Table Templates
+The Chain-IT template also uses:
+- `PREHEADER`: a short factual description of the message, without new claims.
+- `FOOTER_TAGLINE`: the configured Chain-IT title for the message's selected language, or an explicitly supplied tagline.
 
-### Simple 2-column data table
+A layout-only update preserves existing message wording and header values. Use the existing subject for the layout title when no separate title is supplied.
 
-Best for: key-value pairs, readings, comparisons.
+## Brand-specific content formatting
 
-```html
-<h2>Section title</h2>
-<table>
-  <tr><th style="width:60%">Description</th><th>Valeur</th></tr>
-  <tr><td>Label 1</td><td><strong>Value 1</strong></td></tr>
-  <tr><td>Label 2</td><td><strong>Value 2</strong></td></tr>
-  <tr><td>Label 3</td><td><strong>Value 3</strong></td></tr>
-</table>
-```
+| Element | Longhorn IP | Chain-IT |
+|---|---|---|
+| Heading color | `#4d412c` | `#4A0D1B` |
+| Accent | `#d9b626` | `#7A1A2E` |
+| Body text | `#3c3a35` | `#1A1A1A` |
+| Table header | `#6a593d`, white text | `#7A1A2E`, white text |
+| Table stripe | `#faf7ef` | `#F7F5F3` |
+| Table border | `#e6e1d5` | `#DCD3D3` |
 
-### Multi-section data (repeated tables)
+Use real data tables only when the content needs them. Use column headers with `scope="col"`. Layout-only tables retain `role="presentation"`. Do not apply the former generic blue table theme over a branded template.
 
-For emails with multiple data groups (e.g., meter readings + invoice details + calculation):
+## Logos and MIME structure
 
-```html
-<h2>📊 Section 1</h2>
-<table>
-  <tr><th style="width:60%">Description</th><th>Valeur</th></tr>
-  <tr><td>Item A</td><td><strong>Value</strong></td></tr>
-  <tr><td>Item B</td><td><strong>Value</strong></td></tr>
-</table>
+- Longhorn IP: preserve the existing remote logo URL in its template. Do not silently replace it with another image. Remote-image display depends on the recipient's email settings.
+- Chain-IT: embed `../../email-manager/references/chainit-web-logo.png` in the HTML `multipart/related` branch with `Content-ID: <chainit-web-logo>` and inline disposition. The HTML uses `cid:chainit-web-logo`. Do not attach it as a regular file.
+- Include both plain text and HTML in `multipart/alternative`. The plain-text fallback must contain the same message content and signature, without HTML markup.
+- If files are attached, use an outer `multipart/mixed` and preserve all attachments during updates.
+- Check saved MIME and image references after Gmail draft creation or update. A successful API response alone does not establish layout fidelity.
 
-<h2>💧 Section 2</h2>
-<table>
-  <tr><th style="width:60%">Description</th><th>Valeur</th></tr>
-  <tr><td>Item C</td><td>Value</td></tr>
-  <tr><td>Montant total</td><td>1 234,56 €</td></tr>
-</table>
+## Draft and send rules
 
-<h2>🧮 Section 3</h2>
-<table>
-  <tr><th style="width:60%">Calcul</th><th>Montant</th></tr>
-  <tr><td>83 m3 × 4,5227 €</td><td class="total">= 375,38 €</td></tr>
-</table>
-```
+Create drafts in the selected Gmail account, preserving reply threading. Never send without explicit user confirmation. After approval, prefer sending the exact saved draft through the Gmail API, not a desktop composer that may rewrite the HTML.
 
----
-
-## 📝 Full Email Layout
-
-Use this structure for complete HTML emails with content tables + signature.
-
-```html
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; }
-  .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-  h2 { color: #2563eb; font-size: 16px; margin: 20px 0 10px; }
-  table { border-collapse: collapse; width: 100%; margin: 10px 0 15px; }
-  th { background: #2563eb; color: white; padding: 8px 12px; text-align: left; font-weight: 600; }
-  td { padding: 8px 12px; border-bottom: 1px solid #e5e7eb; }
-  tr:nth-child(even) td { background: #f9fafb; }
-  .total { font-weight: bold; color: #dc2626; font-size: 1.1em; }
-</style>
-</head>
-<body>
-<div class="container">
-
-  <!-- Greeting -->
-  <p>Bonjour [Name],</p>
-
-  <!-- Intro paragraph -->
-  <p>...</p>
-
-  <!-- Data tables -->
-  <h2>Section 1</h2>
-  <table>
-    <tr><th style="width:60%">Description</th><th>Valeur</th></tr>
-    <tr><td>Item</td><td><strong>Value</strong></td></tr>
-  </table>
-
-  <!-- More sections... -->
-
-  <!-- Sign-off -->
-  <p>Bonne journée,</p>
-
-  <!-- SIGNATURE — Paste from STYLE-GUIDE.md section 11 -->
-  {{SIGNATURE}}
-
-</div>
-</body>
-</html>
-```
-
----
-
-## ⚡ Quick Reference for the Agent
-
-When drafting a structured email:
-
-1. **Start with the base stylesheet** (`<style>` block above)
-2. **Wrap body in `<div class="container">`**
-3. **Use `<h2>` for section titles**
-4. **Use `<table>` with `<th>` for data**
-5. **Use `.total` class for financial highlights**
-6. **Append signature** from `STYLE-GUIDE.md` section 11 (French or English, HTML or plain text)
-7. **Always send multipart/alternative** (HTML + plain text fallback)
+These instructions control presentation only. They do not define expression style, tone, greeting, vocabulary, sentence structure, or contact-specific phrasing.
